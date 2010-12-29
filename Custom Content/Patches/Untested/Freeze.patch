@@ -1,0 +1,289 @@
+diff --git a/addition/stcore_addition/S090_mangos_freeze_command.sql b/addition/stcore_addition/S090_mangos_freeze_command.sql
+new file mode 100644
+index 0000000..098f53a
+--- /dev/null
++++ b/addition/stcore_addition/S090_mangos_freeze_command.sql
+@@ -0,0 +1,16 @@
++DELETE FROM `command` WHERE `name` = 'freeze' or `name` = 'unfreeze' or name = 'listfreeze';
++INSERT INTO `command` (`name`,`security`,`help`) VALUES 
++('freeze','3','Syntax: .freeze (#player)\r\n\"Freezes\" #player. When using this without #name it will freeze your target.'),
++('unfreeze','3','Syntax: .unfreeze (#player)\r\n\"Unfreezes\" #player. When using this without #name it will unfrezze your target.'),
++('listfreeze','3','Syntax: .listfreeze\r\n\r\nSearch and output all frozen players.');
++
++-- //TODO: normal translation :) 
++DELETE FROM mangos_string WHERE entry BETWEEN 10900 AND 10906;
++INSERT INTO mangos_string VALUES
++(10900,'You froze player %s.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Вы заблокировали передвижение и действия игрока %s'),
++(10901,'Can not freeze self',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Нельзя заблокировать самого себя себя'),
++(10902,'Invalid, input #name or target.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Неправильное условие, выберите игрока либо напишите его ник'),
++(10903,'You unfroze the player %s.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Вы освободили игрока %s'),
++(10904,'No frozen players found.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Заблокированных игроков не найдено'),
++(10905,'The following players are still freezing:',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Передвижение и выполнение действий заблокировано у следующих игроков:'),
++(10906,'- %s',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+\ No newline at end of file
+diff --git a/src/game/Chat.cpp b/src/game/Chat.cpp
+index 594b61c..cae92d5 100644
+--- a/src/game/Chat.cpp
++++ b/src/game/Chat.cpp
+@@ -751,6 +751,10 @@ ChatCommand * ChatHandler::getCommandTable()
+         { "stable",         SEC_ADMINISTRATOR,  false, &ChatHandler::HandleStableCommand,              "", NULL },
+         { "waterwalk",      SEC_ADMINISTRATOR,     false, &ChatHandler::HandleWaterwalkCommand,           "", NULL },
+         { "quit",           SEC_CONSOLE,        true,  &ChatHandler::HandleQuitCommand,                "", NULL },
++        // Custom commands
++        { "freeze",         SEC_ADMINISTRATOR,     false, &ChatHandler::HandleFreezeCommand,              "", NULL },
++        { "unfreeze",       SEC_ADMINISTRATOR,     false, &ChatHandler::HandleUnFreezeCommand,            "", NULL },
++        { "listfreeze",     SEC_ADMINISTRATOR,     false, &ChatHandler::HandleListFreezeCommand,          "", NULL },
+ 
+         { NULL,             0,                  false, NULL,                                           "", NULL }
+     };
+diff --git a/src/game/Chat.h b/src/game/Chat.h
+index b1ffa99..e38ec77 100644
+--- a/src/game/Chat.h
++++ b/src/game/Chat.h
+@@ -570,6 +570,9 @@ class ChatHandler
+         bool HandleStableCommand(char* args);
+         bool HandleWaterwalkCommand(char* args);
+         bool HandleQuitCommand(char* args);
++        bool HandleFreezeCommand(char *args);
++        bool HandleUnFreezeCommand(char *args);
++        bool HandleListFreezeCommand(char* args);
+ 
+         bool HandleAHBotOptionsCommand(char* args);
+ 
+diff --git a/src/game/Language.h b/src/game/Language.h
+index 5ad6b6c..716d146 100644
+--- a/src/game/Language.h
++++ b/src/game/Language.h
+@@ -916,6 +916,13 @@ enum MangosStrings
+ 
+     // Use for not-in-offcial-sources patches
+     //                                    10000-10999
++    LANG_COMMAND_FREEZE                 = 10900,
++    LANG_COMMAND_FREEZE_ERROR           = 10901,
++    LANG_COMMAND_FREEZE_WRONG           = 10902,
++    LANG_COMMAND_UNFREEZE               = 10903,
++    LANG_COMMAND_NO_FROZEN_PLAYERS      = 10904,
++    LANG_COMMAND_LIST_FREEZE            = 10905,
++    LANG_COMMAND_FROZEN_PLAYERS         = 10906,
+ 
+     // Use for custom patches             11000-11999
+     LANG_ANNOUNCE_CHEAT                 = 11000,
+diff --git a/src/game/Level2.cpp b/src/game/Level2.cpp
+index f77d018..5574dae 100644
+--- a/src/game/Level2.cpp
++++ b/src/game/Level2.cpp
+@@ -5058,4 +5058,4 @@ bool ChatHandler::HandleTitlesCurrentCommand(char* args)
+     PSendSysMessage(LANG_TITLE_CURRENT_RES, id, titleInfo->name[GetSessionDbcLocale()], tNameLink.c_str());
+ 
+     return true;
+-}
++}
+\ No newline at end of file
+diff --git a/src/game/Level3.cpp b/src/game/Level3.cpp
+index 88a2d26..4435ebd 100644
+--- a/src/game/Level3.cpp
++++ b/src/game/Level3.cpp
+@@ -53,6 +53,7 @@
+ #include "CreatureEventAIMgr.h"
+ #include "DBCEnums.h"
+ #include "AuctionHouseBot.h"
++#include "SpellAuras.h"
+ 
+ bool ChatHandler::HandleAHBotOptionsCommand(char* args)
+ {
+@@ -7140,6 +7141,195 @@ bool ChatHandler::HandleFlushArenaPointsCommand(char* /*args*/)
+     return true;
+ }
+ 
++bool ChatHandler::HandleFreezeCommand(char *args)
++{
++    std::string name;
++    Player* player;
++    char* TargetName = strtok((char*)args, " "); //get entered #name
++    if (!TargetName) //if no #name entered use target
++    {
++        player = getSelectedPlayer();
++		if (player) //prevent crash with creature as target
++        {   
++           name = player->GetName();
++           normalizePlayerName(name);
++        }
++    }
++    else // if #name entered
++    {
++        name = TargetName;
++        normalizePlayerName(name);
++        player = sObjectMgr.GetPlayer(name.c_str()); //get player by #name
++    }
++
++
++    //effect
++    if ((player) && (!(player==m_session->GetPlayer())))
++    {
++        PSendSysMessage(LANG_COMMAND_FREEZE,name.c_str());
++
++        //stop combat + unattackable + duel block + stop some spells
++        player->setFaction(35);
++        player->CombatStop();
++		if(player->IsNonMeleeSpellCasted(true))
++        player->InterruptNonMeleeSpells(true);
++        player->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
++        player->SetUInt32Value(PLAYER_DUEL_TEAM, 1);
++
++		//if player class = hunter || warlock remove pet if alive
++        if((player->getClass() == CLASS_HUNTER) || (player->getClass() == CLASS_WARLOCK))
++        {
++            if(Pet* pet = player->GetPet())
++            {
++                pet->SavePetToDB(PET_SAVE_AS_CURRENT);
++                // not let dismiss dead pet
++                if(pet && pet->isAlive())
++                player->RemovePet(pet,PET_SAVE_NOT_IN_SLOT);
++            }
++        }
++
++        //stop movement and disable spells
++        //uint32 spellID = 9454;
++        //m_session->GetPlayer()->CastSpell(player,spellID,false);
++        uint32 spellID = 9454;
++        SpellEntry const *spellInfo = sSpellStore.LookupEntry( spellID );
++        if(spellInfo) //TODO: Change the duration of the aura to -1 instead of 5000000
++        {
++            SpellAuraHolder *holder = CreateSpellAuraHolder(spellInfo, player, m_session->GetPlayer());
++            for(uint32 i = 0;i<3;i++)
++            {
++                uint8 eff = spellInfo->Effect[i];
++                if (eff>=TOTAL_SPELL_EFFECTS)
++                    continue;
++                if( eff == SPELL_EFFECT_APPLY_AREA_AURA_PARTY || eff == SPELL_EFFECT_APPLY_AURA ||
++                    eff == SPELL_EFFECT_PERSISTENT_AREA_AURA || eff == SPELL_EFFECT_APPLY_AREA_AURA_FRIEND || 
++                    eff == SPELL_EFFECT_APPLY_AREA_AURA_ENEMY)
++                {
++                    SpellEffectIndex si;
++                    switch(i)
++                    {
++                        case 0: si=EFFECT_INDEX_0;break;
++                        case 1: si=EFFECT_INDEX_1;break;
++                        default:si=EFFECT_INDEX_2;
++					}
++                    Aura *aur = CreateAura(spellInfo, si, NULL, holder, player);
++                    holder->AddAura(aur, si);
++                }
++            }
++            player->AddSpellAuraHolder(holder);
++        }
++
++
++        //save player
++        player->SaveToDB();
++    }
++
++    if (!player)
++    {
++        SendSysMessage(LANG_COMMAND_FREEZE_WRONG);
++        return true;
++    }
++
++    if (player==m_session->GetPlayer())
++    {
++        SendSysMessage(LANG_COMMAND_FREEZE_ERROR);
++        return true;
++    }
++
++    return true;
++}
++
++bool ChatHandler::HandleUnFreezeCommand(char *args)
++{
++    std::string name;
++    Player* player;
++    char* TargetName = strtok((char*)args, " "); //get entered #name
++    if (!TargetName) //if no #name entered use target
++    {
++        player = getSelectedPlayer();
++		if (player) //prevent crash with creature as target
++        {   
++           name = player->GetName();
++        }
++    }
++
++    else // if #name entered
++    {
++        name = TargetName;
++        normalizePlayerName(name);
++        player = sObjectMgr.GetPlayer(name.c_str()); //get player by #name
++    }
++
++    //effect
++    if (player)
++    {
++        PSendSysMessage(LANG_COMMAND_UNFREEZE,name.c_str());
++
++        //Reset player faction + allow combat + allow duels
++        player->setFactionForRace(player->getRace());
++        player->RemoveFlag (UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
++
++        //allow movement and spells
++        uint32 spellID = 9454;
++        player->RemoveAurasDueToSpell(spellID);
++
++        //save player
++        player->SaveToDB();
++    }
++
++    if (!player)
++    {
++        if (TargetName)
++        {        
++            //check for offline players
++		    QueryResult *result = CharacterDatabase.PQuery("SELECT characters.guid FROM `characters` WHERE characters.name = '%s'",name.c_str());
++            if(!result)
++		    {
++			    SendSysMessage(LANG_COMMAND_FREEZE_WRONG);
++                return true;
++		    }
++		    //if player found: delete his freeze aura
++		    Field *fields=result->Fetch();
++            uint64 pguid = fields[0].GetUInt64();
++		    delete result;
++            CharacterDatabase.PQuery("DELETE FROM `character_aura` WHERE character_aura.spell = 9454 AND character_aura.guid = '%u'",pguid);
++            PSendSysMessage(LANG_COMMAND_UNFREEZE,name.c_str());
++            return true;
++		}
++		else
++        {
++	        SendSysMessage(LANG_COMMAND_FREEZE_WRONG);
++            return true;
++		}
++    }
++
++    return true;
++}
++
++bool ChatHandler::HandleListFreezeCommand(char* args)
++{
++    //Get names from DB
++    QueryResult *result = CharacterDatabase.PQuery("SELECT characters.name FROM `characters` LEFT JOIN `character_aura` ON (characters.guid = character_aura.guid) WHERE character_aura.spell = 9454");
++    if(!result)
++    {
++        SendSysMessage(LANG_COMMAND_NO_FROZEN_PLAYERS);
++        return true;
++    }
++    //Header of the names
++    PSendSysMessage(LANG_COMMAND_LIST_FREEZE);
++    
++    //Output of the results
++	do
++    {
++        Field *fields = result->Fetch();
++        std::string fplayers = fields[0].GetCppString();
++        PSendSysMessage(LANG_COMMAND_FROZEN_PLAYERS,fplayers.c_str());
++    } while (result->NextRow());
++
++    delete result;
++    return true;
++}
++
+ bool ChatHandler::HandleModifyGenderCommand(char *args)
+ {
+     if (!*args)

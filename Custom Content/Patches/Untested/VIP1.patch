@@ -1,0 +1,249 @@
+diff --git a/addition/stcore_addition/S095_mangos_vip_commands.sql b/addition/stcore_addition/S095_mangos_vip_commands.sql
+new file mode 100644
+index 0000000..04e21fa
+--- /dev/null
++++ b/addition/stcore_addition/S095_mangos_vip_commands.sql
+@@ -0,0 +1,8 @@
++-- Custom feature, read syntax for explonation. 
++REPLACE INTO `command` (`name`,`security`,`help`) VALUES ('vip debuff',1,'Syntax: .vip debuff - removes Resurrection Sickness and Deserter debuffs from owner');
++REPLACE INTO `command` (`name`,`security`,`help`) VALUES ('vip map', 1, 'Syntax: .vip map - reveals all maps to owner');
++REPLACE INTO `command` (`name`,`security`,`help`) VALUES ('vip bank', 1, 'Syntax: .vip bank - Show your bank inventory.');
++REPLACE INTO `command` (`name`,`security`,`help`) VALUES ('vip repair', 1, 'Syntax: .vip repair - repair all your items.');
++REPLACE INTO `command` (`name`,`security`,`help`) VALUES ('vip auction', 1, 'Syntax: .vip auction - opens auctionhouse window to character.');
++REPLACE INTO `command` (`name`,`security`,`help`) VALUES ('vip resettalents', 1, 'Syntax: .vip resettalents - reset talents to your character.');
++REPLACE INTO `command` (`name`,`security`,`help`) VALUES ('vip whispers', 1, 'Syntax: .vip whispers - Enable/disable accepting whispers by VIP accounts from players.');
+diff --git a/src/game/Chat.cpp b/src/game/Chat.cpp
+index cae92d5..4f6bb8c 100644
+--- a/src/game/Chat.cpp
++++ b/src/game/Chat.cpp
+@@ -658,6 +658,19 @@ ChatCommand * ChatHandler::getCommandTable()
+         { "import",         SEC_ADMINISTRATOR,  false, &ChatHandler::HandleWpImportCommand,            "", NULL },
+         { NULL,             0,                  false, NULL,                                           "", NULL }
+     };
++    
++    static ChatCommand vipCommandTable[] =
++    {
++        { "debuff",         SEC_ADMINISTRATOR,  false, &ChatHandler::HandleVipDebuffCommand,           "", NULL },
++        { "map",            SEC_ADMINISTRATOR,  false, &ChatHandler::HandleVipMapCommand,              "", NULL },
++        { "bank",           SEC_ADMINISTRATOR,  false, &ChatHandler::HandleVipBankCommand,             "", NULL },
++        { "repair",         SEC_ADMINISTRATOR,  false, &ChatHandler::HandleVipRepairCommand,           "", NULL },
++        { "auction",        SEC_ADMINISTRATOR,  false, &ChatHandler::HandleVipAuctionCommand,          "", NULL },
++        { "resettalents",   SEC_ADMINISTRATOR,  false, &ChatHandler::HandleVipResetTalentsCommand,     "", NULL },
++        { "whispers",       SEC_ADMINISTRATOR,  false, &ChatHandler::HandleVipWhispersCommand,         "", NULL },
++        
++        { NULL,             0,                  false, NULL,                                           "", NULL }
++    };
+ 
+     static ChatCommand commandTable[] =
+     {
+@@ -750,11 +763,12 @@ ChatCommand * ChatHandler::getCommandTable()
+         { "repairitems",    SEC_ADMINISTRATOR,     true,  &ChatHandler::HandleRepairitemsCommand,         "", NULL },
+         { "stable",         SEC_ADMINISTRATOR,  false, &ChatHandler::HandleStableCommand,              "", NULL },
+         { "waterwalk",      SEC_ADMINISTRATOR,     false, &ChatHandler::HandleWaterwalkCommand,           "", NULL },
+-        { "quit",           SEC_CONSOLE,        true,  &ChatHandler::HandleQuitCommand,                "", NULL },
++        { "quit",           SEC_CONSOLE,           true,  &ChatHandler::HandleQuitCommand,                "", NULL },
+         // Custom commands
+-        { "freeze",         SEC_ADMINISTRATOR,     false, &ChatHandler::HandleFreezeCommand,              "", NULL },
+-        { "unfreeze",       SEC_ADMINISTRATOR,     false, &ChatHandler::HandleUnFreezeCommand,            "", NULL },
+-        { "listfreeze",     SEC_ADMINISTRATOR,     false, &ChatHandler::HandleListFreezeCommand,          "", NULL },
++        { "freeze",         SEC_ADMINISTRATOR,     true, &ChatHandler::HandleFreezeCommand,              "", NULL },
++        { "unfreeze",       SEC_ADMINISTRATOR,     true, &ChatHandler::HandleUnFreezeCommand,            "", NULL },
++        { "listfreeze",     SEC_ADMINISTRATOR,     true, &ChatHandler::HandleListFreezeCommand,          "", NULL },
++        { "vip",            SEC_ADMINISTRATOR,     true, NULL,                                           "", vipCommandTable },
+ 
+         { NULL,             0,                  false, NULL,                                           "", NULL }
+     };
+diff --git a/src/game/Chat.h b/src/game/Chat.h
+index e38ec77..d79d7b3 100644
+--- a/src/game/Chat.h
++++ b/src/game/Chat.h
+@@ -573,6 +573,13 @@ class ChatHandler
+         bool HandleFreezeCommand(char *args);
+         bool HandleUnFreezeCommand(char *args);
+         bool HandleListFreezeCommand(char* args);
++        bool HandleVipDebuffCommand(char* args);
++        bool HandleVipMapCommand(char* args);
++        bool HandleVipBankCommand(char* args);
++        bool HandleVipRepairCommand(char* args);
++        bool HandleVipAuctionCommand(char* args);
++        bool HandleVipResetTalentsCommand(char* args);
++        bool HandleVipWhispersCommand(char* args);
+ 
+         bool HandleAHBotOptionsCommand(char* args);
+ 
+diff --git a/src/game/Level3.cpp b/src/game/Level3.cpp
+index 4435ebd..4a68ff6 100644
+--- a/src/game/Level3.cpp
++++ b/src/game/Level3.cpp
+@@ -7330,6 +7330,171 @@ bool ChatHandler::HandleListFreezeCommand(char* args)
+     return true;
+ }
+ 
++bool ChatHandler::HandleVipDebuffCommand(char* /*args*/)
++{   
++    Player *chr = m_session->GetPlayer();
++
++
++    //Different Checks
++    if( chr->isInCombat()		// combat check
++        || chr->InBattleGround()   // BG/Arena check
++        || chr->HasStealthAura()   // Stealth check
++        || chr->HasFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_FEIGN_DEATH)) // Feign Death check (hunter)
++    {
++        SendSysMessage(LANG_YOU_IN_COMBAT);
++        SetSentErrorMessage(true);
++        return false;
++    }
++    
++    m_session->GetPlayer()->RemoveAurasDueToSpell(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS);
++    m_session->GetPlayer()->RemoveAurasDueToSpell(26013);
++
++    return true;
++}
++
++bool ChatHandler::HandleVipMapCommand(char* /*args*/)
++{
++    Player *chr = m_session->GetPlayer();
++
++    //Different Checks
++    if( chr->isInCombat()		// combat check
++        || chr->InBattleGround()   // BG/Arena check
++        || chr->HasStealthAura()   // Stealth check
++        || chr->HasFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_FEIGN_DEATH)) // Feign Death check (hunter)
++    {
++        SendSysMessage(LANG_YOU_IN_COMBAT);
++        SetSentErrorMessage(true);
++        return false;
++    }
++
++    PSendSysMessage(LANG_YOU_SET_EXPLORE_ALL, GetNameLink(m_session->GetPlayer()).c_str());
++    for (uint8 i=0; i<PLAYER_EXPLORED_ZONES_SIZE; ++i)
++    {
++        m_session->GetPlayer()->SetFlag(PLAYER_EXPLORED_ZONES_1+i,0xFFFFFFFF); 
++    }
++
++    return true;
++}
++
++bool ChatHandler::HandleVipBankCommand(char* /*args*/)
++{
++    Player *chr = m_session->GetPlayer();
++
++    //Different Checks
++    if( chr->isInCombat()		// combat check
++        || chr->InBattleGround()   // BG/Arena check
++        || chr->HasStealthAura()   // Stealth check
++        || chr->HasFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_FEIGN_DEATH)) // Feign Death check (hunter)
++    {
++        SendSysMessage(LANG_YOU_IN_COMBAT);
++        SetSentErrorMessage(true);
++        return false;
++    }
++
++    m_session->SendShowBank(m_session->GetPlayer()->GetObjectGuid());
++
++    return true;
++}
++
++bool ChatHandler::HandleVipRepairCommand(char* /*args*/)
++{
++    Player *chr = m_session->GetPlayer();
++
++    //Different Checks
++    if( chr->isInCombat()		// combat check
++        || chr->InBattleGround()   // BG/Arena check
++        || chr->HasStealthAura()   // Stealth check
++        || chr->HasFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_FEIGN_DEATH)) // Feign Death check (hunter)
++    {
++        SendSysMessage(LANG_YOU_IN_COMBAT);
++        SetSentErrorMessage(true);
++        return false;
++    }
++    
++    // Repair items
++    m_session->GetPlayer()->DurabilityRepairAll(false, 0, false);
++
++    PSendSysMessage(LANG_YOUR_ITEMS_REPAIRED, GetNameLink(m_session->GetPlayer()).c_str());
++    return true;
++}
++
++bool ChatHandler::HandleVipAuctionCommand(char* /*args*/)
++{
++    Player *chr = m_session->GetPlayer();
++
++    //Different Checks
++    if( chr->isInCombat()		// combat check
++        || chr->InBattleGround()   // BG/Arena check
++        || chr->HasStealthAura()   // Stealth check
++        || chr->HasFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_FEIGN_DEATH)) // Feign Death check (hunter)
++    {
++        SendSysMessage(LANG_YOU_IN_COMBAT);
++        SetSentErrorMessage(true);
++        return false;
++    }
++
++    m_session->GetPlayer()->SetAuctionAccessMode(0);
++    m_session->SendAuctionHello(m_session->GetPlayer());
++
++    return true;
++}
++
++bool ChatHandler::HandleVipResetTalentsCommand(char* /*args*/)
++{
++    Player *chr = m_session->GetPlayer();
++
++    //Different Checks
++    if( chr->isInCombat()		// combat check
++        || chr->InBattleGround()   // BG/Arena check
++        || chr->HasStealthAura()   // Stealth check
++        || chr->HasFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_FEIGN_DEATH)) // Feign Death check (hunter)
++    {
++        SendSysMessage(LANG_YOU_IN_COMBAT);
++        SetSentErrorMessage(true);
++        return false;
++    }
++
++    // Reset Talents
++    m_session->GetPlayer()->resetTalents(true);
++    m_session->GetPlayer()->SendTalentsInfoData(false);
++
++    PSendSysMessage(LANG_RESET_TALENTS_ONLINE, GetNameLink(m_session->GetPlayer()).c_str());
++    return true;
++}
++
++
++bool ChatHandler::HandleVipWhispersCommand(char* args)
++{
++    if(!*args)
++    {
++        PSendSysMessage(LANG_COMMAND_WHISPERACCEPTING, m_session->GetPlayer()->isAcceptWhispers() ?  GetMangosString(LANG_ON) : GetMangosString(LANG_OFF));
++        return true;
++    }
++
++    bool value;
++    if (!ExtractOnOff(&args, value))
++    {
++        SendSysMessage(LANG_USE_BOL);
++        SetSentErrorMessage(true);
++        return false;
++    }
++
++    // whisper on
++    if (value)
++    {
++        m_session->GetPlayer()->SetAcceptWhispers(true);
++        SendSysMessage(LANG_COMMAND_WHISPERON);
++    }
++    // whisper off
++    else
++    {
++        m_session->GetPlayer()->SetAcceptWhispers(false);
++        SendSysMessage(LANG_COMMAND_WHISPEROFF);
++    }
++
++    return true;
++}
++
+ bool ChatHandler::HandleModifyGenderCommand(char *args)
+ {
+     if (!*args)

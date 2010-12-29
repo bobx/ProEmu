@@ -1,0 +1,55 @@
+diff --git a/src/game/Level0.cpp b/src/game/Level0.cpp
+index b4feb30..01d24d7 100644
+--- a/src/game/Level0.cpp
++++ b/src/game/Level0.cpp
+@@ -106,6 +106,7 @@ bool ChatHandler::HandleServerInfoCommand(char* /*args*/)
+     //PSendSysMessage(LANG_USING_EVENT_AI,sWorld.GetCreatureEventAIVersion());
+     PSendSysMessage(LANG_CONNECTED_USERS, activeClientsNum, maxActiveClientsNum, queuedClientsNum, maxQueuedClientsNum);
+     PSendSysMessage(LANG_UPTIME, str.c_str());
++    PSendSysMessage("Diff time: %u", sWorld.GetDiffTime());
+ 
+     return true;
+ }
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 5a28887..f90b233 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -88,6 +88,7 @@ World::World()
+     m_ShutdownTimer = 0;
+     m_gameTime=time(NULL);
+     m_startTime=m_gameTime;
++    world_diff_time = 0;
+     m_maxActiveSessionCount = 0;
+     m_maxQueuedSessionCount = 0;
+     m_resultQueue = NULL;
+@@ -1442,6 +1443,9 @@ void World::DetectDBCLang()
+ /// Update the World !
+ void World::Update(uint32 diff)
+ {
++    //World diff time, showed in .s info, for lag detect...
++    world_diff_time = diff;
++
+     ///- Update the different timers
+     for(int i = 0; i < WUPDATE_COUNT; ++i)
+     {
+diff --git a/src/game/World.h b/src/game/World.h
+index 7c3c200..83b1455 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -507,6 +507,8 @@ class World
+         time_t const& GetGameTime() const { return m_gameTime; }
+         /// Uptime (in secs)
+         uint32 GetUptime() const { return uint32(m_gameTime - m_startTime); }
++        /// World diff time (in ms), showed in .s info, for lag detect...
++        uint32 GetDiffTime() const { return world_diff_time; }
+         /// Next daily quests reset time
+         time_t GetNextDailyQuestsResetTime() const { return m_NextDailyQuestReset; }
+         time_t GetNextWeeklyQuestsResetTime() const { return m_NextWeeklyQuestReset; }
+@@ -654,6 +656,7 @@ class World
+         IntervalTimer m_timers[WUPDATE_COUNT];
+         uint32 mail_timer;
+         uint32 mail_timer_expires;
++        uint32 world_diff_time;
+ 
+         typedef UNORDERED_MAP<uint32, Weather*> WeatherMap;
+         WeatherMap m_weathers;

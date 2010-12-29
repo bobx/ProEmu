@@ -1,0 +1,162 @@
+diff --git a/addition/stcore_addition/S003_name_announce.sql b/addition/stcore_addition/S003_name_announce.sql
+new file mode 100644
+index 0000000..d4d0718
+--- /dev/null
++++ b/addition/stcore_addition/S003_name_announce.sql
+@@ -0,0 +1,40 @@
++﻿-- English
++
++DELETE FROM `command` WHERE (`name`='nameannounce');
++INSERT INTO `command` VALUES ('nameannounce',2,'Syntax: .nameannounce $MessageToBroadcast\r\n\r\nSend a global message to all players online in chat log with colored sender\'s name.');
++
++DELETE FROM `mangos_string` WHERE `entry` IN (1301, 1302, 1303, 1304, 1305, 1306, 1307, 1308, 1309, 1310, 1311, 1312); 
++INSERT INTO `mangos_string` VALUES 
++(1301,'|c1f40af20 <Moderator>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1302,'|c1f40af20 <SuperModerator>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1303,'|c1f40af20 <ModeratorChief>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1304,'|c1f40af20 <GameOperator>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
++(1305,'|c1f40af20 <SuperGameOperator>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1306,'|c1f40af20 <GameMaster>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1307,'|c1f40af20 <SuperGameMaster>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1308,'|c1f40af20 <QualityAssurance>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
++(1309,'|c1f40af20 <Developer>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1310,'|c1f40af20 <GameChief>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1311,'|c1f40af20 <SubAdministrator>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1312,'|c1f40af20 <Administrator>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
++
++-- Russian
++/*
++DELETE FROM `command` WHERE (`name`='nameannounce');
++INSERT INTO `command` VALUES ('nameannounce',2,'Syntax: .nameannounce $MessageToBroadcast\r\n\r\nSend a global message to all players online in chat log with colored sender\'s name.');
++
++DELETE FROM `mangos_string` WHERE `entry` IN (1301, 1302, 1303, 1304, 1305, 1306, 1307, 1308, 1309, 1310, 1311, 1312);
++INSERT INTO `mangos_string` VALUES 
++(1301,'|c1f40af20 <V.I.P. not-used!!!>|cff00ffff[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1302,'|c1f40af20 <Модер.>|cff00ffff[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1303,'|c1f40af20 <Техник>|cffd101fe[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1304,'|c1f40af20 <Ассистент>|cff0000ff[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
++(1305,'|c1f40af20 <GameOperator>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
++(1306,'|c1f40af20 <SuperGameOperator>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1307,'|c1f40af20 <GameMaster>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1308,'|c1f40af20 <SuperGameMaster>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1309,'|c1f40af20 <QualityAssurance>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
++(1310,'|c1f40af20 <Developer>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1311,'|c1f40af20 <GameChief>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL), 
++(1312,'|c1f40af20 <Админ>|cffff0000[%s]|c1f40af20 announce:|cffffff00 %s|r',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
++*/
+\ No newline at end of file
+diff --git a/src/game/Chat.cpp b/src/game/Chat.cpp
+index e54d373..4e475c3 100644
+--- a/src/game/Chat.cpp
++++ b/src/game/Chat.cpp
+@@ -689,6 +689,7 @@ ChatCommand * ChatHandler::getCommandTable()
+         { "aura",           SEC_ADMINISTRATOR,  false, &ChatHandler::HandleAuraCommand,                "", NULL },
+         { "unaura",         SEC_ADMINISTRATOR,  false, &ChatHandler::HandleUnAuraCommand,              "", NULL },
+         { "announce",       SEC_MODERATOR,      true,  &ChatHandler::HandleAnnounceCommand,            "", NULL },
++        { "nameannounce",   SEC_ADMINISTRATOR,  false, &ChatHandler::HandleNameAnnounceCommand,        "", NULL },
+         { "notify",         SEC_MODERATOR,      true,  &ChatHandler::HandleNotifyCommand,              "", NULL },
+         { "goname",         SEC_MODERATOR,      false, &ChatHandler::HandleGonameCommand,              "", NULL },
+         { "namego",         SEC_MODERATOR,      false, &ChatHandler::HandleNamegoCommand,              "", NULL },
+diff --git a/src/game/Chat.h b/src/game/Chat.h
+index 6f325a9..c30c38a 100644
+--- a/src/game/Chat.h
++++ b/src/game/Chat.h
+@@ -514,6 +514,7 @@ class ChatHandler
+         bool HandleGroupgoCommand(char* args);
+         bool HandleRecallCommand(char* args);
+         bool HandleAnnounceCommand(char* args);
++		bool HandleNameAnnounceCommand(char* args);
+         bool HandleNotifyCommand(char* args);
+         bool HandleGPSCommand(char* args);
+         bool HandleTaxiCheatCommand(char* args);
+diff --git a/src/game/Language.h b/src/game/Language.h
+index f5b712e..31ab802 100644
+--- a/src/game/Language.h
++++ b/src/game/Language.h
+@@ -900,6 +900,19 @@ enum MangosStrings
+ 
+     // Broadcaster
+     LANG_AUTO_BROADCAST                 = 1300,
++	
++    LANG_SYSTEMMESSAGE_MODERATOR          = 1301,
++    LANG_SYSTEMMESSAGE_SUPERMODERATOR     = 1302,
++    LANG_SYSTEMMESSAGE_MODERATORCHIEF     = 1303,
++    LANG_SYSTEMMESSAGE_GAMEOPERATOR       = 1304,
++    LANG_SYSTEMMESSAGE_SUPERGAMEOPERATOR  = 1305,
++    LANG_SYSTEMMESSAGE_GAMEMASTER         = 1306,
++    LANG_SYSTEMMESSAGE_SUPERGAMEMASTER    = 1307,
++    LANG_SYSTEMMESSAGE_QUALITYASSURANCE   = 1308,
++    LANG_SYSTEMMESSAGE_DEVELOPER          = 1309,
++    LANG_SYSTEMMESSAGE_GAMECHIEF          = 1310,
++    LANG_SYSTEMMESSAGE_SUBADMINISTRATOR   = 1311,
++    LANG_SYSTEMMESSAGE_ADMINISTRATOR      = 1312,
+ 
+     // Use for not-in-offcial-sources patches
+     //                                    10000-10999
+diff --git a/src/game/Level1.cpp b/src/game/Level1.cpp
+index de7957b..cfe628b 100644
+--- a/src/game/Level1.cpp
++++ b/src/game/Level1.cpp
+@@ -130,6 +130,62 @@ bool ChatHandler::HandleAnnounceCommand(char* args)
+     return true;
+ }
+ 
++// Nameannounce
++bool ChatHandler::HandleNameAnnounceCommand(char* args)
++{
++    int32 strid = 0;
++ 
++	if(!*args)
++        return false;
++ 	
++
++    switch(m_session->GetSecurity())
++	{
++		case SEC_MODERATOR:
++			strid = LANG_SYSTEMMESSAGE_MODERATOR;
++        break;
++		case SEC_SUPERMODERATOR:
++			strid = LANG_SYSTEMMESSAGE_SUPERMODERATOR;
++        break;
++		case SEC_MODERATORCHIEF:
++			strid = LANG_SYSTEMMESSAGE_MODERATORCHIEF;
++        break;
++		case SEC_GAMEOPERATOR:
++			strid = LANG_SYSTEMMESSAGE_GAMEOPERATOR;
++        break;
++		case SEC_SUPERGAMEOPERATOR:
++			strid = LANG_SYSTEMMESSAGE_SUPERGAMEOPERATOR;
++        break;
++		case SEC_GAMEMASTER:
++			strid = LANG_SYSTEMMESSAGE_GAMEMASTER;
++        break;
++		case SEC_SUPERGAMEMASTER:
++			strid = LANG_SYSTEMMESSAGE_SUPERGAMEMASTER;
++        break;
++		case SEC_QUALITYASSURANCE:
++			strid = LANG_SYSTEMMESSAGE_QUALITYASSURANCE;
++        break;
++		case SEC_DEVELOPER:
++			strid = LANG_SYSTEMMESSAGE_DEVELOPER;
++        break;
++		case SEC_GAMECHIEF:
++			strid = LANG_SYSTEMMESSAGE_GAMECHIEF;
++        break;
++		case SEC_SUBADMINISTRATOR:
++			strid = LANG_SYSTEMMESSAGE_SUBADMINISTRATOR;
++        break;
++		case SEC_ADMINISTRATOR:
++			strid = LANG_SYSTEMMESSAGE_ADMINISTRATOR;
++        break;
++		default:
++			return false;
++    }
++    sWorld.SendWorldText(strid, m_session->GetPlayerName(), args);
++    return true;
++}
++
++
++
+ //notification player at the screen
+ bool ChatHandler::HandleNotifyCommand(char* args)
+ {

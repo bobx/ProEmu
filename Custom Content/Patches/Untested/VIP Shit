@@ -1,0 +1,426 @@
+diff --git a/src/game/AuctionHouseBot.cpp b/src/game/AuctionHouseBot.cpp
+index 5e21cb2..5fbb33e 100644
+--- a/src/game/AuctionHouseBot.cpp
++++ b/src/game/AuctionHouseBot.cpp
+@@ -791,7 +791,7 @@ void AuctionHouseBot::Update()
+     if ((!AHBSeller) && (!AHBBuyer))
+         return;
+ 
+-    WorldSession _session(AHBplayerAccount, NULL, SEC_PLAYER, true, 0, LOCALE_enUS);
++    WorldSession _session(AHBplayerAccount, NULL, SEC_PLAYER, NULL, true, 0, LOCALE_enUS);
+     Player _AHBplayer(&_session);
+     _AHBplayer.MinimalLoadFromDB(AHBplayerGUID.GetCounter());
+     ObjectAccessor::Instance().AddObject(&_AHBplayer);
+diff --git a/src/game/Formulas.h b/src/game/Formulas.h
+index 46c5800..71cbe09 100644
+--- a/src/game/Formulas.h
++++ b/src/game/Formulas.h
+@@ -122,7 +122,14 @@ namespace MaNGOS
+             if(u->GetTypeId()==TYPEID_UNIT && ((Creature*)u)->IsElite())
+                 xp_gain *= 2;
+ 
+-            return (uint32)(xp_gain*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL));
++            if(pl->GetSession()->IsPremium())
++            {
++                return uint32(xp_gain*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_PREMIUM_KILL));
++            } 
++            else 
++            {
++                return uint32(xp_gain*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL));
++            }
+         }
+ 
+         inline float xp_in_group_rate(uint32 count, bool isRaid)
+diff --git a/src/game/Player.cpp b/src/game/Player.cpp
+index e16418d..8cee407 100644
+--- a/src/game/Player.cpp
++++ b/src/game/Player.cpp
+@@ -5041,7 +5041,7 @@ void Player::LeaveLFGChannel()
+ 
+ void Player::UpdateDefense()
+ {
+-    uint32 defense_skill_gain = sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_DEFENSE);
++    uint32 defense_skill_gain = (GetSession()->IsPremium() != 0 ? sWorld.getConfig(CONFIG_UINT32_SKILL_PREMIUM_GAIN_DEFENSE) : sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_DEFENSE));
+ 
+     if(UpdateSkill(SKILL_DEFENSE,defense_skill_gain))
+     {
+@@ -5480,8 +5480,8 @@ bool Player::UpdateCraftSkill(uint32 spellid)
+                     learnSpell(discoveredSpell, false);
+             }
+ 
+-            uint32 craft_skill_gain = sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_CRAFTING);
+-
++            uint32 craft_skill_gain = (GetSession()->IsPremium() != 0 ? sWorld.getConfig(CONFIG_UINT32_SKILL_PREMIUM_GAIN_CRAFTING) : sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_CRAFTING));
++            
+             return UpdateSkillPro(_spell_idx->second->skillId, SkillGainChance(SkillValue,
+                 _spell_idx->second->max_value,
+                 (_spell_idx->second->max_value + _spell_idx->second->min_value)/2,
+@@ -5496,8 +5496,8 @@ bool Player::UpdateGatherSkill(uint32 SkillId, uint32 SkillValue, uint32 RedLeve
+ {
+     DEBUG_LOG("UpdateGatherSkill(SkillId %d SkillLevel %d RedLevel %d)", SkillId, SkillValue, RedLevel);
+ 
+-    uint32 gathering_skill_gain = sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_GATHERING);
+-
++    uint32 gathering_skill_gain = (GetSession()->IsPremium() != 0 ? sWorld.getConfig(CONFIG_UINT32_SKILL_PREMIUM_GAIN_GATHERING) : sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_GATHERING));
++    
+     // For skinning and Mining chance decrease with level. 1-74 - no decrease, 75-149 - 2 times, 225-299 - 8 times
+     switch (SkillId)
+     {
+@@ -5528,7 +5528,7 @@ bool Player::UpdateFishingSkill()
+ 
+     int32 chance = SkillValue < 75 ? 100 : 2500/(SkillValue-50);
+ 
+-    uint32 gathering_skill_gain = sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_GATHERING);
++    uint32 gathering_skill_gain = (GetSession()->IsPremium() != 0 ? sWorld.getConfig(CONFIG_UINT32_SKILL_PREMIUM_GAIN_GATHERING) : sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_GATHERING));
+ 
+     return UpdateSkillPro(SKILL_FISHING,chance*10,gathering_skill_gain);
+ }
+@@ -5631,7 +5631,8 @@ void Player::UpdateWeaponSkill (WeaponAttackType attType)
+     if(m_form == FORM_TREE)
+         return;                                             // use weapon but not skill up
+ 
+-    uint32 weapon_skill_gain = sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_WEAPON);
++    uint32 weapon_skill_gain = (GetSession()->IsPremium() != 0 ? sWorld.getConfig(CONFIG_UINT32_SKILL_PREMIUM_GAIN_WEAPON) : sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_WEAPON));
++
+ 
+     switch(attType)
+     {
+@@ -6350,7 +6351,14 @@ void Player::CheckAreaExploreAndOutdoor()
+                 uint32 XP = 0;
+                 if (diff < -5)
+                 {
+-                    XP = uint32(sObjectMgr.GetBaseXP(getLevel()+5)*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
++                    if(GetSession()->IsPremium())
++                    {
++                        XP = uint32(sObjectMgr.GetBaseXP(getLevel()+5)*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_PREMIUM_EXPLORE));
++                    } 
++                    else 
++                    {
++                        XP = uint32(sObjectMgr.GetBaseXP(getLevel()+5)*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
++                    }
+                 }
+                 else if (diff > 5)
+                 {
+@@ -6360,11 +6368,25 @@ void Player::CheckAreaExploreAndOutdoor()
+                     else if (exploration_percent < 0)
+                         exploration_percent = 0;
+ 
+-                    XP = uint32(sObjectMgr.GetBaseXP(p->area_level)*exploration_percent/100*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
++                    if(GetSession()->IsPremium())
++                    {
++                        XP = uint32(sObjectMgr.GetBaseXP(p->area_level)*exploration_percent/100*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_PREMIUM_EXPLORE));
++                    } 
++                    else 
++                    {
++                        XP = uint32(sObjectMgr.GetBaseXP(p->area_level)*exploration_percent/100*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
++                    }
+                 }
+                 else
+                 {
+-                    XP = uint32(sObjectMgr.GetBaseXP(p->area_level)*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
++                    if(GetSession()->IsPremium())
++                    {
++                        XP = uint32(sObjectMgr.GetBaseXP(p->area_level)*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_PREMIUM_EXPLORE));
++                    } 
++                    else 
++                    {
++                        XP = uint32(sObjectMgr.GetBaseXP(p->area_level)*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
++                    }
+                 }
+ 
+                 GiveXP( XP, NULL );
+@@ -6475,8 +6497,15 @@ int32 Player::CalculateReputationGain(ReputationSource source, int32 rep, int32
+ 
+         percent *= repRate;
+     }
+-
+-    return int32(sWorld.getConfig(CONFIG_FLOAT_RATE_REPUTATION_GAIN)*rep*percent/100.0f);
++    
++    if(GetSession()->IsPremium())
++    {
++        return int32(sWorld.getConfig(CONFIG_FLOAT_RATE_PREMIUM_REPUTATION_GAIN)*rep*percent/100.0f);
++    }
++    else
++    {
++        return int32(sWorld.getConfig(CONFIG_FLOAT_RATE_REPUTATION_GAIN)*rep*percent/100.0f);
++    }
+ }
+ 
+ //Calculates how many reputation points player gains in victim's enemy factions
+@@ -6797,7 +6826,14 @@ bool Player::RewardHonor(Unit *uVictim, uint32 groupsize, float honor)
+ 
+     if (uVictim != NULL)
+     {
+-        honor *= sWorld.getConfig(CONFIG_FLOAT_RATE_HONOR);
++        if (GetSession()->IsPremium())
++        {
++            honor *= sWorld.getConfig(CONFIG_FLOAT_RATE_PREMIUM_HONOR);
++        }
++        else
++        {
++            honor *= sWorld.getConfig(CONFIG_FLOAT_RATE_HONOR);
++        }
+         honor *= (GetMaxPositiveAuraModifier(SPELL_AURA_MOD_HONOR_GAIN) + 100.0f)/100.0f;
+ 
+         if(groupsize > 1)
+@@ -8269,7 +8305,14 @@ void Player::SendLoot(ObjectGuid guid, LootType loot_type)
+                     loot->FillLoot(0, LootTemplates_Creature, this, false);
+                 // It may need a better formula
+                 // Now it works like this: lvl10: ~6copper, lvl70: ~9silver
+-                bones->loot.gold = (uint32)( urand(50, 150) * 0.016f * pow( ((float)pLevel)/5.76f, 2.5f) * sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY) );
++                if (GetSession()->IsPremium())
++                {
++                    bones->loot.gold = (uint32)( urand(50, 150) * 0.016f * pow( ((float)pLevel)/5.76f, 2.5f) * sWorld.getConfig(CONFIG_FLOAT_RATE_PREMIUM_DROP_MONEY) );
++                }
++                else
++                {
++                    bones->loot.gold = (uint32)( urand(50, 150) * 0.016f * pow( ((float)pLevel)/5.76f, 2.5f) * sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY) );
++                }
+             }
+ 
+             if (bones->lootRecipient != this)
+@@ -8309,7 +8352,14 @@ void Player::SendLoot(ObjectGuid guid, LootType loot_type)
+                     // Generate extra money for pick pocket loot
+                     const uint32 a = urand(0, creature->getLevel()/2);
+                     const uint32 b = urand(0, getLevel()/2);
+-                    loot->gold = uint32(10 * (a + b) * sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY));
++                    if (GetSession()->IsPremium())
++                    {
++                        loot->gold = uint32(10 * (a + b) * sWorld.getConfig(CONFIG_FLOAT_RATE_PREMIUM_DROP_MONEY));
++                    }
++                    else
++                    {
++                        loot->gold = uint32(10 * (a + b) * sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY));
++                    }
+                 }
+             }
+             else
+@@ -14076,13 +14126,15 @@ void Player::RewardQuest(Quest const *pQuest, uint32 reward, Object* questGiver,
+     QuestStatusData& q_status = mQuestStatus[quest_id];
+ 
+     // Not give XP in case already completed once repeatable quest
+-    uint32 XP = q_status.m_rewarded ? 0 : uint32(pQuest->XPValue(this)*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST));
+-
++    uint32 XP = q_status.m_rewarded ? 0 : (GetSession()->IsPremium() != 0 ? uint32(pQuest->XPValue( this )*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_PREMIUM_QUEST)) : uint32(pQuest->XPValue( this )*sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST)));
++ 
++    
+     if (getLevel() < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+         GiveXP(XP , NULL);
+     else
+     {
+-        uint32 money = uint32(pQuest->GetRewMoneyMaxLevel() * sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY));
++        uint32 money = (GetSession()->IsPremium() != 0 ? uint32(pQuest->GetRewMoneyMaxLevel() * sWorld.getConfig(CONFIG_FLOAT_RATE_PREMIUM_DROP_MONEY)) : uint32(pQuest->GetRewMoneyMaxLevel() * sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY)));
++
+         ModifyMoney( money );
+         GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_MONEY_FROM_QUEST_REWARD, money);
+     }
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 237d387..ab8c098 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -780,6 +780,21 @@ void World::LoadConfigSettings(bool reload)
+ 	// External Mail
+ 	setConfig(CONFIG_UINT32_EXTERNAL_MAIL, "ExternalMail.Enabled", 0);
+ 	setConfig(CONFIG_UINT32_EXTERNAL_MAIL_INTERVAL, "ExternalMail.Interval", 600);
++    
++    //Premium Accounts
++    setConfig(CONFIG_BOOL_PREMIUM_ENABLE,                       "Premuim.Account.Enable", true);
++    setConfigPos(CONFIG_UINT32_PREMIUM_GMLEVEL,                 "Premuim.Account.GmLevel", 1);
++    setConfig(CONFIG_FLOAT_RATE_XP_PREMIUM_KILL,                "Premium.Rate.XP.Kill", 1.0f);
++    setConfig(CONFIG_FLOAT_RATE_XP_PREMIUM_QUEST,               "Premium.Rate.XP.Quest", 1.0f);
++    setConfig(CONFIG_FLOAT_RATE_XP_PREMIUM_EXPLORE,             "Premium.Rate.XP.Explore", 1.0f);
++    setConfig(CONFIG_FLOAT_RATE_PREMIUM_REPUTATION_GAIN,        "Premium.Rate.Reputation.Gain", 1.0f);
++    setConfig(CONFIG_FLOAT_RATE_PREMIUM_HONOR,                  "Premium.Rate.Honor", 1.0f);
++    setConfigPos(CONFIG_FLOAT_RATE_PREMIUM_DROP_MONEY,          "Premium.Rate.Drop.Money", 1.0f);
++    setConfig(CONFIG_UINT32_SKILL_PREMIUM_GAIN_WEAPON,          "Premium.SkillGain.Weapon", 1);
++    setConfigPos(CONFIG_UINT32_SKILL_PREMIUM_GAIN_DEFENSE,      "Premium.SkillGain.Defense", 1);
++    setConfigPos(CONFIG_UINT32_SKILL_PREMIUM_GAIN_CRAFTING,     "Premium.SkillGain.Crafting", 1);
++    setConfigPos(CONFIG_UINT32_SKILL_PREMIUM_GAIN_GATHERING,    "Premium.SkillGain.Gathering", 1);
++
+ 
+     m_VisibleUnitGreyDistance = sConfig.GetFloatDefault("Visibility.Distance.Grey.Unit", 1);
+     if(m_VisibleUnitGreyDistance >  MAX_VISIBILITY_DISTANCE)
+diff --git a/src/game/World.h b/src/game/World.h
+index 569754d..d19d69b 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -146,6 +146,11 @@ enum eConfigUInt32Values
+     CONFIG_UINT32_SKILL_GAIN_DEFENSE,
+     CONFIG_UINT32_SKILL_GAIN_GATHERING,
+     CONFIG_UINT32_SKILL_GAIN_WEAPON,
++    CONFIG_UINT32_SKILL_PREMIUM_GAIN_CRAFTING,
++    CONFIG_UINT32_SKILL_PREMIUM_GAIN_DEFENSE,
++    CONFIG_UINT32_SKILL_PREMIUM_GAIN_GATHERING,
++    CONFIG_UINT32_SKILL_PREMIUM_GAIN_WEAPON,
++    CONFIG_UINT32_PREMIUM_GMLEVEL,
+     CONFIG_UINT32_MAX_OVERSPEED_PINGS,
+     CONFIG_UINT32_EXPANSION,
+     CONFIG_UINT32_CHATFLOOD_MESSAGE_COUNT,
+@@ -230,6 +235,12 @@ enum eConfigFloatValues
+     CONFIG_FLOAT_RATE_XP_KILL,
+     CONFIG_FLOAT_RATE_XP_QUEST,
+     CONFIG_FLOAT_RATE_XP_EXPLORE,
++    CONFIG_FLOAT_RATE_XP_PREMIUM_KILL,
++    CONFIG_FLOAT_RATE_XP_PREMIUM_QUEST,
++    CONFIG_FLOAT_RATE_XP_PREMIUM_EXPLORE,
++    CONFIG_FLOAT_RATE_PREMIUM_REPUTATION_GAIN,
++    CONFIG_FLOAT_RATE_PREMIUM_HONOR,
++    CONFIG_FLOAT_RATE_PREMIUM_DROP_MONEY,
+     CONFIG_FLOAT_RATE_REPUTATION_GAIN,
+     CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_KILL,
+     CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_QUEST,
+@@ -298,6 +309,7 @@ enum eConfigBoolValues
+     CONFIG_BOOL_INSTANCE_IGNORE_LEVEL,
+     CONFIG_BOOL_INSTANCE_IGNORE_RAID,
+     CONFIG_BOOL_CAST_UNSTUCK,
++    CONFIG_BOOL_PREMIUM_ENABLE,
+     CONFIG_BOOL_GM_LOG_TRADE,
+     CONFIG_BOOL_GM_LOWER_SECURITY,
+     CONFIG_BOOL_GM_ALLOW_ACHIEVEMENT_GAINS,
+diff --git a/src/game/WorldSession.cpp b/src/game/WorldSession.cpp
+index 28ac1b7..39b606a 100644
+--- a/src/game/WorldSession.cpp
++++ b/src/game/WorldSession.cpp
+@@ -40,9 +40,9 @@
+ #include "zlib/zlib.h"
+ 
+ /// WorldSession constructor
+-WorldSession::WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale) :
++WorldSession::WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, bool ispremium, uint8 expansion, time_t mute_time, LocaleConstant locale) :
+ LookingForGroup_auto_join(false), LookingForGroup_auto_add(false), m_muteTime(mute_time),
+-_player(NULL), m_Socket(sock),_security(sec), _accountId(id), m_expansion(expansion), _logoutTime(0),
++_player(NULL), m_Socket(sock),_security(sec), _ispremium(ispremium), _accountId(id), m_expansion(expansion), _logoutTime(0),
+ m_inQueue(false), m_playerLoading(false), m_playerLogout(false), m_playerRecentlyLogout(false), m_playerSave(false),
+ m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(sObjectMgr.GetIndexForLocale(locale)),
+ m_latency(0), m_tutorialState(TUTORIALDATA_UNCHANGED)
+diff --git a/src/game/WorldSession.h b/src/game/WorldSession.h
+index 8971c04..9c72e0d 100644
+--- a/src/game/WorldSession.h
++++ b/src/game/WorldSession.h
+@@ -148,7 +148,7 @@ class MANGOS_DLL_SPEC WorldSession
+ {
+     friend class CharacterHandler;
+     public:
+-        WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale);
++        WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, bool ispremium, uint8 expansion, time_t mute_time, LocaleConstant locale);
+         ~WorldSession();
+ 
+         bool PlayerLoading() const { return m_playerLoading; }
+@@ -173,6 +173,7 @@ class MANGOS_DLL_SPEC WorldSession
+         void SendRedirectClient(std::string& ip, uint16 port);
+ 
+         AccountTypes GetSecurity() const { return _security; }
++        bool IsPremium() const { return _ispremium; }
+         uint32 GetAccountId() const { return _accountId; }
+         Player* GetPlayer() const { return _player; }
+         char const* GetPlayerName() const;
+@@ -809,6 +810,7 @@ class MANGOS_DLL_SPEC WorldSession
+         AccountTypes _security;
+         uint32 _accountId;
+         uint8 m_expansion;
++        bool _ispremium; 
+ 
+         time_t _logoutTime;
+         bool m_inQueue;                                     // session wait in auth.queue
+diff --git a/src/game/WorldSocket.cpp b/src/game/WorldSocket.cpp
+index 413bd4c..25e6b3c 100644
+--- a/src/game/WorldSocket.cpp
++++ b/src/game/WorldSocket.cpp
+@@ -747,6 +747,7 @@ int WorldSocket::HandleAuthSession (WorldPacket& recvPacket)
+     uint8 expansion = 0;
+     LocaleConstant locale;
+     std::string account;
++    bool isPremium = false;
+     Sha1Hash sha1;
+     BigNumber v, s, g, N, K;
+     WorldPacket packet;
+@@ -882,6 +883,15 @@ int WorldSocket::HandleAuthSession (WorldPacket& recvPacket)
+         sLog.outError ("WorldSocket::HandleAuthSession: Sent Auth Response (Account banned).");
+         return -1;
+     }
++    
++    // Check Premium Account
++    uint32 premlvl = sWorld.getConfig (CONFIG_UINT32_PREMIUM_GMLEVEL);
++    QueryResult *premresult =
++        LoginDatabase.PQuery ("SELECT 1 FROM account WHERE id = '%u' AND gmlevel >= '%u'", id, premlvl); 
++    if (premresult && sWorld.getConfig(CONFIG_BOOL_PREMIUM_ENABLE)) // if account premium and system enable
++    {
++        isPremium = true; 
++    }
+ 
+     // Check locked state for server
+     AccountTypes allowedAccountType = sWorld.GetPlayerSecurityLimit ();
+@@ -938,7 +948,7 @@ int WorldSocket::HandleAuthSession (WorldPacket& recvPacket)
+                             safe_account.c_str ());
+ 
+     // NOTE ATM the socket is single-threaded, have this in mind ...
+-    ACE_NEW_RETURN (m_Session, WorldSession (id, this, AccountTypes(security), expansion, mutetime, locale), -1);
++    ACE_NEW_RETURN (m_Session, WorldSession (id, this, AccountTypes(security), isPremium, expansion, mutetime, locale), -1);
+ 
+     m_Crypt.Init(&K);
+ 
+diff --git a/src/mangosd/mangosd.conf.dist.in b/src/mangosd/mangosd.conf.dist.in
+index 9887915..d43b634 100644
+--- a/src/mangosd/mangosd.conf.dist.in
++++ b/src/mangosd/mangosd.conf.dist.in
+@@ -1442,6 +1442,60 @@ Death.Bones.World = 1
+ Death.Bones.BattlegroundOrArena = 1
+ 
+ ###################################################################################################################
++#  PREMIUM ACCOUNTS CONFIG
++#  author: Selector
++#  made special for: stcore
++#
++#    Premuim.Account.Enable
++#        Enable Premium Account System
++#        Default: 0 - off
++#                 1 - on
++#
++#    Premuim.Account.GmLevel
++#        Only accounts that are above this gm-level or exact at the same, are premium.
++#        Default: 1
++#
++#    Premium.Rate.XP.Kill
++#    Premium.Rate.XP.Quest 
++#    Premium.Rate.XP.Explore
++#        XP rates for Premium Accounts (can be fractional 1.5, 2.7, 3.5, etc.)
++#        Default: 1
++#
++#
++#    Premium.Rate.Reputation.Gain
++#        Reputation rates for Premium Accounts (can be fractional 1.5, 2.7, 3.5, etc.)
++#        Default: 1
++#
++#    Premium.Rate.Honor
++#        Honor rates for Premium Accounts (can be fractional 1.5, 2.7, 3.5, etc.)
++#        Default: 1
++#
++#    Premium.Rate.Drop.Money 
++#        Money rates for Premium Accounts (can be fractional 1.5, 2.7, 3.5, etc.)
++#        Default: 1
++#
++#    Premium.SkillGain.Crafting
++#    Premium.SkillGain.Defense
++#    Premium.SkillGain.Gathering 
++#    Premium.SkillGain.Weapon
++#        SkillGain rates for Premium Accounts (can be only integral 2, 5, 10, etc.)
++#        Default: 1
++#
++###################################################################################################################
++Premuim.Account.Enable = 0
++Premuim.Account.GmLevel = 1
++Premium.Rate.XP.Kill    = 1
++Premium.Rate.XP.Quest = 1
++Premium.Rate.XP.Explore = 1
++Premium.Rate.Reputation.Gain    = 1
++Premium.Rate.Honor   = 1
++Premium.Rate.Drop.Money = 1
++Premium.SkillGain.Weapon = 1
++Premium.SkillGain.Defense   = 1
++Premium.SkillGain.Crafting    = 1
++Premium.SkillGain.Gathering = 1
++
++###################################################################################################################
+ # BATTLEGROUND CONFIG
+ #
+ #    Battleground.CastDeserter

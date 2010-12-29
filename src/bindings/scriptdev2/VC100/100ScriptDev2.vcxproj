@@ -217,6 +217,15 @@
     <ClCompile Include="..\base\guard_ai.cpp" />
     <ClCompile Include="..\base\pet_ai.cpp" />
     <ClCompile Include="..\scripts\battlegrounds\battleground.cpp" />
+    <ClCompile Include="..\scripts\custom\custom_gameobjects.cpp" />
+    <ClCompile Include="..\scripts\custom\custom_items.cpp" />
+    <ClCompile Include="..\scripts\custom\custom_npc_buffmaster.cpp" />
+    <ClCompile Include="..\scripts\custom\custom_npc_professionmaster.cpp" />
+    <ClCompile Include="..\scripts\custom\custom_npc_renamecharacter.cpp" />
+    <ClCompile Include="..\scripts\custom\custom_npc_resetlevel.cpp" />
+    <ClCompile Include="..\scripts\custom\custom_npc_spellmaster.cpp" />
+    <ClCompile Include="..\scripts\custom\custom_npc_teleportmaster.cpp" />
+    <ClCompile Include="..\scripts\custom\custom_npc_titlemaster.cpp" />
     <ClCompile Include="..\scripts\custom\npc_arena_honor.cpp" />
     <ClCompile Include="..\scripts\custom\teleguy.cpp" />
     <ClCompile Include="..\scripts\eastern_kingdoms\alterac_mountains.cpp" />
@@ -709,7 +718,6 @@
     <ClCompile Include="..\scripts\outland\tempest_keep\the_eye\boss_void_reaver.cpp" />
     <ClCompile Include="..\scripts\outland\tempest_keep\the_eye\instance_the_eye.cpp" />
     <ClCompile Include="..\scripts\outland\tempest_keep\the_eye\the_eye.cpp" />
-    <ClCompile Include="..\scripts\outland\tempest_keep\the_mechanar\boss_gatewatcher_gyrokill.cpp" />
     <ClCompile Include="..\scripts\outland\tempest_keep\the_mechanar\boss_gatewatcher_ironhand.cpp" />
     <ClCompile Include="..\scripts\outland\tempest_keep\the_mechanar\boss_nethermancer_sepethrea.cpp" />
     <ClCompile Include="..\scripts\outland\tempest_keep\the_mechanar\boss_pathaleon_the_calculator.cpp" />

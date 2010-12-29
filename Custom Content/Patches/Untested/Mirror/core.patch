@@ -1,0 +1,50 @@
+diff --git a/src/game/Chat.cpp b/src/game/Chat.cpp
+index 8dc9148..8ceaa09 100644
+--- a/src/game/Chat.cpp
++++ b/src/game/Chat.cpp
+@@ -350,6 +350,7 @@ ChatCommand * ChatHandler::getCommandTable()
+         { "morph",          SEC_GAMEMASTER,     false, &ChatHandler::HandleModifyMorphCommand,         "", NULL },
+         { "phase",          SEC_ADMINISTRATOR,  false, &ChatHandler::HandleModifyPhaseCommand,         "", NULL },
+         { "gender",         SEC_GAMEMASTER,     false, &ChatHandler::HandleModifyGenderCommand,        "", NULL },
++        { "mirror",         SEC_GAMEMASTER,     false, &ChatHandler::HandleModifyMirrorCommand,        "", NULL }, ///// yim mirror
+         { NULL,             0,                  false, NULL,                                           "", NULL }
+     };
+ 
+diff --git a/src/game/Chat.h b/src/game/Chat.h
+index b82899e..f6d9ef6 100644
+--- a/src/game/Chat.h
++++ b/src/game/Chat.h
+@@ -275,6 +275,7 @@ class ChatHandler
+         bool HandleModifyArenaCommand(const char* args);
+         bool HandleModifyPhaseCommand(const char* args);
+         bool HandleModifyGenderCommand(const char* args);
++        bool HandleModifyMirrorCommand(const char* args);
+ 
+         //-----------------------Npc Commands-----------------------
+         bool HandleNpcAddCommand(const char* args);
+diff --git a/src/game/Level2.cpp b/src/game/Level2.cpp
+index 03a8c8a..dce483d 100644
+--- a/src/game/Level2.cpp
++++ b/src/game/Level2.cpp
+@@ -4694,3 +4694,22 @@ bool ChatHandler::HandleTitlesCurrentCommand(const char* args)
+ 
+     return true;
+ }
++
++//mirror
++bool ChatHandler::HandleModifyMirrorCommand(const char* args)
++{
++    Creature *pCreature = getSelectedCreature();
++ 
++    if (!pCreature)
++    {
++        SendSysMessage("Please select a creature.");
++        SetSentErrorMessage(true);
++        return false;
++    }
++    CreatureInfo const* cInfo = pCreature->GetCreatureInfo();
++ 
++    m_session->GetPlayer()->SetDisplayId(pCreature->GetDisplayId());
++ 
++    return true;
++}

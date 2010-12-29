@@ -1,0 +1,48 @@
+From a76bef3d1567dd7d38463b17565ad7d435b82f43 Mon Sep 17 00:00:00 2001
+From: Wortex <Wortexqq@Gmail.com>
+Date: Sun, 5 Dec 2010 21:22:04 -0800
+Subject: [PATCH 2/2] Fix WSG Reward Mod
+
+Signed-off-by: Wortex <Wortexqq@Gmail.com>
+---
+ src/game/BattleGroundWS.cpp |   17 +++++++++++++++++
+ 1 files changed, 17 insertions(+), 0 deletions(-)
+
+diff --git a/src/game/BattleGroundWS.cpp b/src/game/BattleGroundWS.cpp
+index 18893d2..8c1bde1 100644
+--- a/src/game/BattleGroundWS.cpp
++++ b/src/game/BattleGroundWS.cpp
+@@ -268,6 +268,9 @@ void BattleGroundWS::EventPlayerCapturedFlag(Player *Source)
+ 
+     if (GetTeamScore(HORDE) == BG_WS_MAX_TEAM_SCORE)
+         winner = HORDE;
++        
++    // Award a mark to the capturer
++    Source->StoreNewItemInBestSlots(20558, 1);
+ 
+     if (winner)
+     {
+@@ -593,6 +596,20 @@ void BattleGroundWS::EndBattleGround(Team winner)
+     //complete map_end rewards (even if no team wins)
+     RewardHonorToTeam(GetBonusHonorFromKill(m_HonorEndKills), ALLIANCE);
+     RewardHonorToTeam(GetBonusHonorFromKill(m_HonorEndKills), HORDE);
++    
++    for(BattleGroundPlayerMap::iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
++    {
++        Team team = itr->second.PlayerTeam;
++
++        Player *plr = sObjectMgr.GetPlayer(itr->first);
++        if (!plr)
++           continue;
++
++        if(team == winner)
++            plr->StoreNewItemInBestSlots(20558, 3);
++        else
++            plr->StoreNewItemInBestSlots(20558, 1);
++    }
+ 
+     BattleGround::EndBattleGround(winner);
+ }
+-- 
+1.7.3.1.msysgit.0
+

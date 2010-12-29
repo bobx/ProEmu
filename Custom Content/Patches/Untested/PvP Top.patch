@@ -1,0 +1,284 @@
+From 72503fb4f3a2480acc25a3b1807b4b227dfba267 Mon Sep 17 00:00:00 2001
+From: Wortex <Wortexqq@Gmail.com>
+Date: Sun, 5 Dec 2010 21:34:25 -0800
+Subject: [PATCH 2/2] Fix PvP Top Patch
+
+Signed-off-by: Wortex <Wortexqq@Gmail.com>
+---
+ src/game/Chat.cpp                |    8 ++++
+ src/game/Chat.h                  |    4 ++
+ src/game/Level0.cpp              |   20 +++++++++++
+ src/game/World.cpp               |   68 ++++++++++++++++++++++++++++++++++++++
+ src/game/World.h                 |   20 ++++++++++-
+ src/mangosd/mangosd.conf.dist.in |   14 ++++++++
+ 6 files changed, 133 insertions(+), 1 deletions(-)
+
+diff --git a/src/game/Chat.cpp b/src/game/Chat.cpp
+index 536919d..c7d619b 100644
+--- a/src/game/Chat.cpp
++++ b/src/game/Chat.cpp
+@@ -111,6 +111,13 @@ ChatCommand * ChatHandler::getCommandTable()
+         { "",               SEC_ADMINISTRATOR,  false, &ChatHandler::HandleAuctionCommand,             "", NULL },
+         { NULL,             0,                  false, NULL,                                           "", NULL }
+     };
++    
++    static ChatCommand pvpTopCommandTable[] =
++    {
++        { "kill",           SEC_PLAYER,         false, &ChatHandler::HandlePvpKillTopCommand,         "", NULL },
++        { "streak",         SEC_PLAYER,         false, &ChatHandler::HandlePvpKillStreakTopCommand,   "", NULL },
++        { NULL,             0,                  false, NULL,                                          "", NULL }
++    };
+ 
+     static ChatCommand banCommandTable[] =
+     {
+@@ -749,6 +756,7 @@ ChatCommand * ChatHandler::getCommandTable()
+         { "stable",         SEC_ADMINISTRATOR,  false, &ChatHandler::HandleStableCommand,              "", NULL },
+         { "waterwalk",      SEC_GAMEMASTER,     false, &ChatHandler::HandleWaterwalkCommand,           "", NULL },
+         { "quit",           SEC_CONSOLE,        true,  &ChatHandler::HandleQuitCommand,                "", NULL },
++        { "top",            SEC_PLAYER,         false, NULL,                                           "", pvpTopCommandTable   },
+ 
+         { NULL,             0,                  false, NULL,                                           "", NULL }
+     };
+diff --git a/src/game/Chat.h b/src/game/Chat.h
+index b322da5..d07c75e 100644
+--- a/src/game/Chat.h
++++ b/src/game/Chat.h
+@@ -573,6 +573,10 @@ class ChatHandler
+ 
+         //! Development Commands
+         bool HandleSaveAllCommand(char* args);
++        
++        //! PVP Top Commands
++        bool HandlePvpKillTopCommand(char* args);
++        bool HandlePvpKillStreakTopCommand(char* args);
+ 
+         Player*   getSelectedPlayer();
+         Creature* getSelectedCreature();
+diff --git a/src/game/Level0.cpp b/src/game/Level0.cpp
+index 28df3ae..bdadeba 100644
+--- a/src/game/Level0.cpp
++++ b/src/game/Level0.cpp
+@@ -86,6 +86,26 @@ bool ChatHandler::HandleStartCommand(char* /*args*/)
+     return true;
+ }
+ 
++bool ChatHandler::HandlePvpKillTopCommand(char* /*args*/)
++{
++    std::vector<PvpTopStat> data = sWorld.getKillTop();
++    PSendSysMessage("==== Kill Top %u ==== ", data.size());
++    for( uint32 i=0; i<data.size(); ++i )
++        PSendSysMessage("%u - %s - %u", i+1, data[i].Name.c_str(), data[i].Value);
++
++    return true;
++}
++
++bool ChatHandler::HandlePvpKillStreakTopCommand(char* /*args*/)
++{
++    std::vector<PvpTopStat> data = sWorld.getKillStreakTop();
++    PSendSysMessage("==== Kill Streak Top %u ==== ", data.size());
++    for( uint32 i=0; i<data.size(); ++i )
++        PSendSysMessage("%u - %s - %u", i+1, data[i].Name.c_str(), data[i].Value);
++
++    return true;
++}
++
+ bool ChatHandler::HandleServerInfoCommand(char* /*args*/)
+ {
+     uint32 activeClientsNum = sWorld.GetActiveSessionCount();
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index f0498f9..bc9d6f3 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -868,6 +868,9 @@ void World::LoadConfigSettings(bool reload)
+         m_dataPath = dataPath;
+         sLog.outString("Using DataDir %s",m_dataPath.c_str());
+     }
++    
++    setConfig(CONFIG_UINT32_PVPTOP_INTERVAL, "PvpTop.Interval", 60);
++    setConfig(CONFIG_UINT32_PVPTOP_SIZE, "PvpTop.Size", 10);
+ 
+     setConfig(CONFIG_BOOL_VMAP_INDOOR_CHECK, "vmap.enableIndoorCheck", true);
+     bool enableLOS = sConfig.GetBoolDefault("vmap.enableLOS", false);
+@@ -1311,6 +1314,7 @@ void World::SetInitialWorldSettings()
+     m_timers[WUPDATE_CORPSES].SetInterval(20*MINUTE*IN_MILLISECONDS);
+     m_timers[WUPDATE_DELETECHARS].SetInterval(DAY*IN_MILLISECONDS); // check for chars to delete every day
+     m_timers[WUPDATE_AUTOBROADCAST].SetInterval(abtimer);
++    m_timers[WUPDATE_PVPTOP].SetInterval(m_configUint32Values[CONFIG_UINT32_PVPTOP_INTERVAL]*MINUTE*IN_MILLISECONDS);
+ 
+     //to set mailtimer to return mails every day between 4 and 5 am
+     //mailtimer is increased when updating auctions
+@@ -1358,6 +1362,11 @@ void World::SetInitialWorldSettings()
+     sLog.outString("Starting Game Event system..." );
+     uint32 nextGameEvent = sGameEventMgr.Initialize();
+     m_timers[WUPDATE_EVENTS].SetInterval(nextGameEvent);    //depend on next event
++    
++    sLog.outString("Initializing top PvP lists..." );
++    m_killTop.resize(m_configUint32Values[CONFIG_UINT32_PVPTOP_SIZE]);
++    m_killStreakTop.resize(m_configUint32Values[CONFIG_UINT32_PVPTOP_SIZE]);
++    UpdatePvpTop();
+ 
+     // Delete all characters which have been deleted X days before
+     Player::DeleteOldCharacters();
+@@ -1473,6 +1482,13 @@ void World::Update(uint32 diff)
+ 
+         UpdateSessions(diff);
+     }
++    
++    /// <li> Update top scores when necessary
++    if (m_timers[WUPDATE_PVPTOP].Passed())
++    {
++        m_timers[WUPDATE_PVPTOP].Reset();
++        UpdatePvpTop();
++    }
+ 
+     /// <li> Handle weather updates when the timer has passed
+     if (m_timers[WUPDATE_WEATHERS].Passed())
+@@ -2459,3 +2475,55 @@ bool World::configNoReload(bool reload, eConfigBoolValues index, char const* fie
+ 
+     return false;
+ }
++
++void World::UpdatePvpTop()
++{
++    sLog.outBasic("PVPTOP> Updating top scores");
++
++    for(uint32 i=0;i < m_configUint32Values[CONFIG_UINT32_PVPTOP_SIZE]; ++i)
++    {
++        m_killTop[i].Name = "No One";
++        m_killTop[i].Value = 0;
++
++        m_killStreakTop[i].Name = "No One";
++        m_killStreakTop[i].Value = 0;
++    }
++
++    QueryResult* result = CharacterDatabase.PQuery("SELECT name, totalKills FROM characters ORDER BY totalKills DESC LIMIT 0,%u", m_configUint32Values[CONFIG_UINT32_PVPTOP_SIZE]);
++    if(!result)
++        return;
++
++    uint32 i = 0;
++    do
++    {
++        Field *fields = result->Fetch();
++
++        if (fields[1].GetUInt32() == 0)
++            continue;
++
++        m_killTop[i].Name = fields[0].GetCppString();
++        m_killTop[i].Value = fields[1].GetUInt32();
++
++        ++i;
++    } while (result->NextRow());
++    delete result;
++
++    result = CharacterDatabase.PQuery("SELECT c.name, p.killstreak FROM character_pvp p LEFT JOIN characters c ON p.guid = c.guid ORDER BY p.killstreak DESC LIMIT 0,%u", m_configUint32Values[CONFIG_UINT32_PVPTOP_SIZE]);
++    if(!result)
++        return;
++
++    i = 0;
++    do
++    {
++        Field *fields = result->Fetch();
++
++        if (fields[1].GetUInt32() == 0)
++            continue;
++
++        m_killStreakTop[i].Name = fields[0].GetCppString();
++        m_killStreakTop[i].Value = fields[1].GetUInt32();
++
++        ++i;
++    } while (result->NextRow());
++    delete result;
++}
+\ No newline at end of file
+diff --git a/src/game/World.h b/src/game/World.h
+index f00acd3..f5fc2bb 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -32,6 +32,7 @@
+ #include <map>
+ #include <set>
+ #include <list>
++#include <vector>
+ 
+ class Object;
+ class WorldPacket;
+@@ -83,7 +84,8 @@ enum WorldTimers
+     WUPDATE_EVENTS      = 6,
+     WUPDATE_DELETECHARS = 7,
+     WUPDATE_AUTOBROADCAST = 8,
+-    WUPDATE_COUNT       = 9
++    WUPDATE_PVPTOP      = 9,
++    WUPDATE_COUNT       = 10
+ };
+ 
+ /// Configuration elements
+@@ -192,6 +194,8 @@ enum eConfigUInt32Values
+     CONFIG_UINT32_ANTICHEAT_ACTION_DELAY,
+     CONFIG_UINT32_NUMTHREADS,
+     CONFIG_UINT32_RANDOM_BG_RESET_HOUR,
++    CONFIG_UINT32_PVPTOP_INTERVAL,
++    CONFIG_UINT32_PVPTOP_SIZE,
+     CONFIG_UINT32_VALUE_COUNT
+ };
+ 
+@@ -429,6 +433,12 @@ struct CliCommandHolder
+     ~CliCommandHolder() { delete[] m_command; }
+ };
+ 
++struct PvpTopStat
++{
++    std::string Name;
++    uint32 Value;
++};
++
+ /// The World
+ class World
+ {
+@@ -437,6 +447,9 @@ class World
+ 
+         World();
+         ~World();
++        
++        std::vector<PvpTopStat> getKillTop() { return m_killTop; }
++        std::vector<PvpTopStat> getKillStreakTop() { return m_killStreakTop; }
+ 
+         WorldSession* FindSession(uint32 id) const;
+         void AddSession(WorldSession *s);
+@@ -691,6 +704,11 @@ class World
+         std::string m_DBVersion;
+         std::string m_CreatureEventAIVersion;
+         std::string m_ScriptsVersion;
++        
++        //update pvptop
++        void UpdatePvpTop();
++        std::vector<PvpTopStat> m_killTop;
++        std::vector<PvpTopStat> m_killStreakTop;
+ };
+ 
+ extern uint32 realmID;
+diff --git a/src/mangosd/mangosd.conf.dist.in b/src/mangosd/mangosd.conf.dist.in
+index 0361f9d..529a084 100644
+--- a/src/mangosd/mangosd.conf.dist.in
++++ b/src/mangosd/mangosd.conf.dist.in
+@@ -1771,3 +1771,17 @@ Anticheat.GmLevel = 0
+ CharDelete.Method = 1
+ CharDelete.MinLevel = 10
+ CharDelete.KeepDays = 30
++
++###################################################################################################################
++# PVP TOP SCORES
++#
++#    PvpTop.Interval
++#        Interval at which to update the top scores (in minutes)
++#        Default: 60
++#    PvpTop.Size
++#        Size of the top score lists
++#        Default: 10
++###################################################################################################################
++
++PvpTop.Interval = 60
++PvpTop.Size = 10
+\ No newline at end of file
+-- 
+1.7.3.1.msysgit.0
+

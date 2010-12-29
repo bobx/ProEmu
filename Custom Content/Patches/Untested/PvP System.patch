@@ -1,0 +1,417 @@
+From 0ae8db0dc270c560ab06f5e5cfc801f5fe752270 Mon Sep 17 00:00:00 2001
+From: Wortex <Wortexqq@Gmail.com>
+Date: Sun, 5 Dec 2010 21:02:25 -0800
+Subject: [PATCH 2/2] Implemented Custom PvP System
+
+Signed-off-by: Wortex <Wortexqq@Gmail.com>
+---
+ sql/pvp_system.sql            |   12 +++
+ src/game/CharacterHandler.cpp |    1 +
+ src/game/Chat.cpp             |   10 +++
+ src/game/Chat.h               |    1 +
+ src/game/Group.cpp            |   22 ++++++
+ src/game/Player.cpp           |  148 +++++++++++++++++++++++++++++++++++++++++
+ src/game/Player.h             |   25 +++++++
+ 7 files changed, 219 insertions(+), 0 deletions(-)
+ create mode 100644 sql/pvp_system.sql
+
+diff --git a/sql/pvp_system.sql b/sql/pvp_system.sql
+new file mode 100644
+index 0000000..412d697
+--- /dev/null
++++ b/sql/pvp_system.sql
+@@ -0,0 +1,12 @@
++CREATE TABLE `character_pvp` (
++  `guid` int(10) unsigned NOT NULL,
++  `totalkills` int(10) unsigned NOT NULL,
++  `currentkills` int(10) unsigned NOT NULL,
++  `totaldeaths` int(10) unsigned NOT NULL,
++  `currentdeaths` int(10) unsigned NOT NULL,
++  `groupkills` int(10) unsigned NOT NULL,
++  `killstreak` int(10) unsigned NOT NULL,
++  `lastkillguid` int(10) unsigned NOT NULL,
++  `lastkillcount` int(10) unsigned NOT NULL,
++  PRIMARY KEY (`guid`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+\ No newline at end of file
+diff --git a/src/game/CharacterHandler.cpp b/src/game/CharacterHandler.cpp
+index 1585d87..4d63998 100644
+--- a/src/game/CharacterHandler.cpp
++++ b/src/game/CharacterHandler.cpp
+@@ -103,6 +103,7 @@ bool LoginQueryHolder::Initialize()
+     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADMAILS,           "SELECT id,messageType,sender,receiver,subject,body,expire_time,deliver_time,money,cod,checked,stationery,mailTemplateId FROM mail WHERE receiver = '%u' ORDER BY id DESC", m_guid.GetCounter());
+     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADMAILEDITEMS,     "SELECT data, text, mail_id, item_guid, item_template FROM mail_items JOIN item_instance ON item_guid = guid WHERE receiver = '%u'", m_guid.GetCounter());
+     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADRANDOMBG,        "SELECT guid FROM character_battleground_random WHERE guid = '%u'", m_guid.GetCounter());
++    res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADPVP,             "SELECT totalkills, currentkills, totaldeaths, currentdeaths, groupkills, killstreak, lastkillguid, lastkillcount FROM character_pvp WHERE guid = %u", m_guid.GetCounter());
+ 
+     return res;
+ }
+diff --git a/src/game/Chat.cpp b/src/game/Chat.cpp
+index 536919d..cfdbbd1 100644
+--- a/src/game/Chat.cpp
++++ b/src/game/Chat.cpp
+@@ -931,6 +931,16 @@ void ChatHandler::PSendSysMessage(int32 entry, ...)
+     SendSysMessage(str);
+ }
+ 
++void ChatHandler::PSendGlobalSysMessage(const char *format, ...)
++{
++    va_list ap;
++    char str [2048];
++    va_start(ap, format);
++    vsnprintf(str,2048,format, ap );
++    va_end(ap);
++    SendGlobalSysMessage(str);
++}
++
+ void ChatHandler::PSendSysMessage(const char *format, ...)
+ {
+     va_list ap;
+diff --git a/src/game/Chat.h b/src/game/Chat.h
+index b322da5..1b61b42 100644
+--- a/src/game/Chat.h
++++ b/src/game/Chat.h
+@@ -89,6 +89,7 @@ class ChatHandler
+         void SendSysMessage(          int32     entry);
+         void PSendSysMessage(         const char *format, ...) ATTR_PRINTF(2,3);
+         void PSendSysMessage(         int32     entry, ...  );
++        void PSendGlobalSysMessage(   const char *format, ...) ATTR_PRINTF(2,3);
+ 
+         bool ParseCommands(const char* text);
+         ChatCommand const* FindCommand(char const* text);
+diff --git a/src/game/Group.cpp b/src/game/Group.cpp
+index 9846fca..b5b3495 100644
+--- a/src/game/Group.cpp
++++ b/src/game/Group.cpp
+@@ -33,6 +33,7 @@
+ #include "InstanceSaveMgr.h"
+ #include "Util.h"
+ #include "LootMgr.h"
++#include "Chat.h"
+ 
+ #define LOOT_ROLL_TIMEOUT  (1*MINUTE*IN_MILLISECONDS)
+ 
+@@ -1940,6 +1941,7 @@ void Group::RewardGroupAtKill(Unit* pVictim, Player* player_tap)
+     uint32 sum_level = 0;
+     Player* member_with_max_level = NULL;
+     Player* not_gray_member_with_max_level = NULL;
++    Player* victim = NULL;
+ 
+     GetDataForXPAtKill(pVictim,count,sum_level,member_with_max_level,not_gray_member_with_max_level,player_tap);
+ 
+@@ -1952,6 +1954,9 @@ void Group::RewardGroupAtKill(Unit* pVictim, Player* player_tap)
+         bool is_raid = PvP ? false : sMapStore.LookupEntry(pVictim->GetMapId())->IsRaid() && isRaidGroup();
+         bool is_dungeon = PvP ? false : sMapStore.LookupEntry(pVictim->GetMapId())->IsDungeon();
+         float group_rate = MaNGOS::XP::xp_in_group_rate(count,is_raid);
++        
++        if(pVictim->GetTypeId() == TYPEID_PLAYER && PvP)
++            victim = (Player*)pVictim;
+ 
+         for(GroupReference *itr = GetFirstMember(); itr != NULL; itr = itr->next())
+         {
+@@ -1967,6 +1972,13 @@ void Group::RewardGroupAtKill(Unit* pVictim, Player* player_tap)
+                 continue;                               // member (alive or dead) or his corpse at req. distance
+ 
+             RewardGroupAtKill_helper(pGroupGuy, pVictim, count, PvP, group_rate, sum_level, is_dungeon, not_gray_member_with_max_level, member_with_max_level, xp);
++            
++            // Reward group members
++            if(victim && (player_tap->GetSession()->GetRemoteAddress() != victim->GetSession()->GetRemoteAddress()))
++            {
++                ChatHandler(pGroupGuy).PSendSysMessage(PVP_CHAT_COLOR"Group member %s killed %s, you have been awarded a Badge of Justice", player_tap->GetName(), victim->GetName());
++                pGroupGuy->StoreNewItemInBestSlots(29434, 1);
++            }
+         }
+ 
+         if(player_tap)
+@@ -1974,6 +1986,16 @@ void Group::RewardGroupAtKill(Unit* pVictim, Player* player_tap)
+             // member (alive or dead) or his corpse at req. distance
+             if(player_tap->IsAtGroupRewardDistance(pVictim))
+                 RewardGroupAtKill_helper(player_tap, pVictim, count, PvP, group_rate, sum_level, is_dungeon, not_gray_member_with_max_level, member_with_max_level, xp);
++                
++            // Handle victims death for PvP mod
++            if(victim && (player_tap->GetSession()->GetRemoteAddress() != victim->GetSession()->GetRemoteAddress()))
++            {
++                victim->HandlePvPDeath(player_tap);
++                ChatHandler(player_tap).PSendSysMessage(PVP_CHAT_COLOR"Group member %s killed %s, you have been awarded a Badge of Justice", player_tap->GetName(), victim->GetName());
++                player_tap->StoreNewItemInBestSlots(29434, 1);
++                player_tap->PvP_CurrentDeaths = 0;
++                player_tap->CastSpell(player_tap, 47883, true);
++            }
+         }
+     }
+ }
+diff --git a/src/game/Player.cpp b/src/game/Player.cpp
+index 4d21fed..a793098 100644
+--- a/src/game/Player.cpp
++++ b/src/game/Player.cpp
+@@ -538,6 +538,19 @@ Player::Player (WorldSession *session): Unit(), m_mover(this), m_camera(this), m
+         m_forced_speed_changes[i] = 0;
+ 
+     m_stableSlots = 0;
++    
++    /////////////////// PvP System /////////////////////
++    PvP_TotalKills = 0;
++    PvP_CurrentKills = 0;
++
++    PvP_TotalDeaths = 0;
++    PvP_CurrentDeaths = 0;
++
++    PvP_KillStreak = 0;
++    PvP_GroupKills = 0;
++
++    PvP_LastKillGuid = 0;
++    PvP_LastKillCount = 0;
+ 
+     /////////////////// Instance System /////////////////////
+ 
+@@ -3722,6 +3735,35 @@ void Player::RemoveAllSpellCooldown()
+     }
+ }
+ 
++void Player::_LoadPvPData(QueryResult* result)
++{
++    ////                                                     0           1             2            3              4           5           6             7
++    //QueryResult *result = CharacterDatabase.PQuery("SELECT totalkills, currentkills, totaldeaths, currentdeaths, groupkills, killstreak, lastkillguid, lastkillcount FROM character_pvp WHERE guid %u", GetGUIDLow());
++
++    if(result)
++    {
++        do
++        {
++            Field *fields = result->Fetch();
++
++            PvP_TotalKills    = fields[0].GetUInt32();
++            PvP_CurrentKills  = fields[1].GetUInt32();
++
++            PvP_TotalDeaths   = fields[2].GetUInt32();
++            PvP_CurrentDeaths = fields[3].GetUInt32();
++
++            PvP_GroupKills    = fields[4].GetUInt32();
++            PvP_KillStreak    = fields[5].GetUInt32();
++
++            PvP_LastKillGuid  = fields[6].GetUInt32();
++            PvP_LastKillCount = fields[7].GetUInt32();
++
++        } while( result->NextRow() );
++    }
++
++    delete result;
++}
++
+ void Player::_LoadSpellCooldowns(QueryResult *result)
+ {
+     // some cooldowns can be already set at aura loading...
+@@ -4392,6 +4434,7 @@ void Player::DeleteFromDB(ObjectGuid playerguid, uint32 accountId, bool updateRe
+             CharacterDatabase.PExecute("DELETE FROM character_equipmentsets WHERE guid = '%u'", lowguid);
+             CharacterDatabase.PExecute("DELETE FROM guild_eventlog WHERE PlayerGuid1 = '%u' OR PlayerGuid2 = '%u'", lowguid, lowguid);
+             CharacterDatabase.PExecute("DELETE FROM guild_bank_eventlog WHERE PlayerGuid = '%u'", lowguid);
++            CharacterDatabase.PExecute("DELETE FROM character_pvp WHERE guid = '%u'", lowguid);
+             CharacterDatabase.CommitTransaction();
+             break;
+         }
+@@ -16044,6 +16087,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder *holder )
+     m_achievementMgr.CheckAllAchievementCriteria();
+ 
+     _LoadEquipmentSets(holder->GetResult(PLAYER_LOGIN_QUERY_LOADEQUIPMENTSETS));
++    _LoadPvPData(holder->GetResult(PLAYER_LOGIN_QUERY_LOADPVP));
+ 
+     return true;
+ }
+@@ -17402,6 +17446,7 @@ void Player::SaveToDB()
+     GetSession()->SaveTutorialsData();                      // changed only while character in game
+     _SaveGlyphs();
+     _SaveTalents();
++    _SavePvPData();
+ 
+     CharacterDatabase.CommitTransaction();
+ 
+@@ -17831,6 +17876,13 @@ void Player::_SaveTalents()
+     }
+ }
+ 
++void Player::_SavePvPData()
++{
++    CharacterDatabase.PExecute("DELETE FROM character_pvp WHERE guid='%u'", GetGUIDLow());
++    CharacterDatabase.PExecute("INSERT INTO character_pvp (guid, totalkills, currentkills, totaldeaths, currentdeaths, groupkills, killstreak, lastkillguid, lastkillcount) VALUES (%u, %u, %u, %u, %u, %u, %u, %u, %u)",
++        GetGUIDLow(), PvP_TotalKills, PvP_CurrentKills, PvP_TotalDeaths, PvP_CurrentDeaths, PvP_GroupKills, PvP_KillStreak, PvP_LastKillGuid, PvP_LastKillCount);
++}
++
+ // save player stats -- only for external usage
+ // real stats will be recalculated on player login
+ void Player::_SaveStats()
+@@ -20896,6 +20948,102 @@ void Player::RewardSinglePlayerAtKill(Unit* pVictim)
+             if(CreatureInfo const* normalInfo = ObjectMgr::GetCreatureTemplate(pVictim->GetEntry()))
+                 KilledMonster(normalInfo, pVictim->GetObjectGuid());
+     }
++    
++    /*********************************************************/
++    /***                  CUSTOM PVP SYSTEM                ***/
++    /*********************************************************/
++
++    // Stop here if:
++    // - The victim isn't a player
++    // - The player killed himself
++    // - The player and the victim aren't in the same zone
++    // - The victim is 10 levels lower than the player
++    if( pVictim->GetTypeId() != TYPEID_PLAYER
++        || GetGUIDLow() == pVictim->GetGUIDLow ()
++        || GetZoneId() != pVictim->GetZoneId()
++        || getLevel() > pVictim->getLevel() + 10 )
++        return;
++
++    Player* victim = (Player*)pVictim;
++
++    // Stop here if:
++    // - The player killed someone on the same IP address
++    // - The player is in a raid group
++    if ( GetSession()->GetRemoteAddress() == victim->GetSession()->GetRemoteAddress()
++        || ( GetGroup() && GetGroup()->isRaidGroup() ) )
++        return;
++
++    ChatHandler pChat = ChatHandler(this);
++    ChatHandler vChat = ChatHandler(victim);
++    uint32 victimOldSpree = 0;
++    uint32 rewardCount = 0;
++
++    // If player has more than 10 kills assign to old spree variable
++    if(victim->PvP_CurrentKills >= 10)
++        victimOldSpree = victim->PvP_CurrentKills;
++
++    victim->HandlePvPDeath(this);
++
++    // Stop if the victim has been killed more than 2 times in a row
++    if (victim->GetGUIDLow() == PvP_LastKillGuid && PvP_LastKillCount > 2)
++    {
++        pChat.PSendSysMessage(PVP_CHAT_COLOR"You already killed this person twice in a row, so you will not be rewarded this time.");
++        return;
++    }
++
++    /* KILLER STATS */
++    ++PvP_CurrentKills;
++    ++PvP_TotalKills;
++    PvP_CurrentDeaths = 0;
++
++    if (PvP_CurrentKills > PvP_KillStreak)
++        PvP_KillStreak = PvP_CurrentKills;
++
++    if(PvP_LastKillGuid == victim->GetGUIDLow())
++    {
++        ++PvP_LastKillCount;
++    }
++    else
++    {
++        PvP_LastKillGuid = victim->GetGUIDLow();
++        PvP_LastKillCount = 1;
++    }
++
++    if(PvP_CurrentKills < 10)
++        rewardCount = 1;
++    else if(PvP_CurrentKills < 20)
++        rewardCount = 2;
++    else
++        rewardCount = 5;
++
++    pChat.PSendSysMessage(PVP_CHAT_COLOR"You killed %s. Your Consecutive Kills: %u, Total Kills: %u. You received your reward, [%s]x%u!", victim->GetName(), PvP_CurrentKills, PvP_TotalKills, "Badge of Justice", rewardCount);
++
++    if(PvP_CurrentKills % 10 == 0)
++    {
++        rewardCount += 5;
++        pChat.PSendGlobalSysMessage(PVP_CHAT_GLOBAL_COLOR"%s is on a %u kill, killing spree! Extra [%s]x5 is rewarded!", GetName(), PvP_CurrentKills, "Badge of Justice");
++    }
++
++    if(victimOldSpree >= 10)
++        rewardCount += 5;
++
++    // Give reward to killer
++    StoreNewItemInBestSlots(29434, rewardCount);
++    CastSpell(this, 47883, true);
++}
++
++void Player::HandlePvPDeath(Player* pKiller)
++{
++    ++PvP_CurrentDeaths;
++    ++PvP_TotalDeaths;
++
++    if(PvP_CurrentKills >= 10)
++        ChatHandler(this).PSendGlobalSysMessage(PVP_CHAT_GLOBAL_COLOR"%s lost a %u kill, killing spree to %s! Extra [%s]x5 is rewarded!", GetName(), PvP_CurrentKills, pKiller->GetName(), "Badge of Justice");
++
++    ChatHandler(this).PSendSysMessage(PVP_CHAT_COLOR"You were killed by %s. Your Consecutive Deaths: %u, Total Deaths: %u.", pKiller->GetName(), PvP_CurrentDeaths, PvP_TotalDeaths);
++
++    // Reset players kills after death
++    PvP_CurrentKills = 0;
+ }
+ 
+ void Player::RewardPlayerAndGroupAtEvent(uint32 creature_id, WorldObject* pRewardSource)
+diff --git a/src/game/Player.h b/src/game/Player.h
+index a9882eb..65a856f 100644
+--- a/src/game/Player.h
++++ b/src/game/Player.h
+@@ -61,6 +61,9 @@ typedef std::deque<Mail*> PlayerMails;
+ #define PLAYER_MAX_DAILY_QUESTS     25
+ #define PLAYER_EXPLORED_ZONES_SIZE  128
+ 
++#define PVP_CHAT_COLOR "|c000000ff[PvP]|r|cFFDAA520" //(Blue)[PvP](Goldenrod)Message
++#define PVP_CHAT_GLOBAL_COLOR "|c00ff0000[PvP]|r|cFF32CD32" //(Red)[PvP](Lime Green)Message
++
+ // Note: SPELLMOD_* values is aura types in fact
+ enum SpellModType
+ {
+@@ -930,6 +933,7 @@ enum PlayerLoginQueryIndex
+     PLAYER_LOGIN_QUERY_LOADWEEKLYQUESTSTATUS,
+     PLAYER_LOGIN_QUERY_LOADMONTHLYQUESTSTATUS,
+     PLAYER_LOGIN_QUERY_LOADRANDOMBG,
++    PLAYER_LOGIN_QUERY_LOADPVP,
+ 
+     MAX_PLAYER_LOGIN_QUERY
+ };
+@@ -1185,6 +1189,8 @@ class MANGOS_DLL_SPEC Player : public Unit
+         bool isGMVisible() const { return !(m_ExtraFlags & PLAYER_EXTRA_GM_INVISIBLE); }
+         void SetGMVisible(bool on);
+         void SetPvPDeath(bool on) { if(on) m_ExtraFlags |= PLAYER_EXTRA_PVP_DEATH; else m_ExtraFlags &= ~PLAYER_EXTRA_PVP_DEATH; }
++        
++        void HandlePvPDeath(Player* pKiller);
+ 
+         // 0 = own auction, -1 = enemy auction, 1 = goblin auction
+         int GetAuctionAccessMode() const { return m_ExtraFlags & PLAYER_EXTRA_AUCTION_ENEMY ? -1 : (m_ExtraFlags & PLAYER_EXTRA_AUCTION_NEUTRAL ? 1 : 0); }
+@@ -2032,6 +2038,23 @@ class MANGOS_DLL_SPEC Player : public Unit
+         uint32 GetMaxPersonalArenaRatingRequirement(uint32 minarenaslot);
+ 
+         //End of PvP System
++        
++        /*********************************************************/
++        /***               CUSTOM PVP SYSTEM START             ***/
++        /*********************************************************/
++        uint32 PvP_TotalKills;
++        uint32 PvP_CurrentKills;
++
++        uint32 PvP_TotalDeaths;
++        uint32 PvP_CurrentDeaths;
++
++        uint32 PvP_KillStreak;
++        uint32 PvP_GroupKills;
++
++        uint32 PvP_LastKillGuid;
++        uint32 PvP_LastKillCount;
++
++        // End of custom PvP System
+ 
+         void SetDrunkValue(uint16 newDrunkValue, uint32 itemid=0);
+         uint16 GetDrunkValue() const { return m_drunk; }
+@@ -2477,6 +2500,7 @@ class MANGOS_DLL_SPEC Player : public Unit
+         void _LoadBGData(QueryResult* result);
+         void _LoadGlyphs(QueryResult *result);
+         void _LoadIntoDataField(const char* data, uint32 startOffset, uint32 count);
++        void _LoadPvPData(QueryResult* result);
+ 
+         /*********************************************************/
+         /***                   SAVE SYSTEM                     ***/
+@@ -2497,6 +2521,7 @@ class MANGOS_DLL_SPEC Player : public Unit
+         void _SaveGlyphs();
+         void _SaveTalents();
+         void _SaveStats();
++        void _SavePvPData();
+ 
+         void _SetCreateBits(UpdateMask *updateMask, Player *target) const;
+         void _SetUpdateBits(UpdateMask *updateMask, Player *target) const;
+-- 
+1.7.3.1.msysgit.0
+

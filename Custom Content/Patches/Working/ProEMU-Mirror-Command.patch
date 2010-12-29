@@ -1,0 +1,65 @@
+From 964ad89f57eba7ccbba2cec98d8c5125e7025500 Mon Sep 17 00:00:00 2001
+From: Wortex <Wortexqq@Gmail.com>
+Date: Wed, 29 Dec 2010 03:06:51 +0200
+Subject: [PATCH] ProEMU Mirror Command
+
+---
+ src/game/Chat.cpp   |    1 +
+ src/game/Chat.h     |    1 +
+ src/game/Level2.cpp |   18 ++++++++++++++++++
+ 3 files changed, 20 insertions(+), 0 deletions(-)
+
+diff --git a/src/game/Chat.cpp b/src/game/Chat.cpp
+index 536919d..f609dc4 100644
+--- a/src/game/Chat.cpp
++++ b/src/game/Chat.cpp
+@@ -379,6 +379,7 @@ ChatCommand * ChatHandler::getCommandTable()
+         { "morph",          SEC_GAMEMASTER,     false, &ChatHandler::HandleModifyMorphCommand,         "", NULL },
+         { "phase",          SEC_ADMINISTRATOR,  false, &ChatHandler::HandleModifyPhaseCommand,         "", NULL },
+         { "gender",         SEC_GAMEMASTER,     false, &ChatHandler::HandleModifyGenderCommand,        "", NULL },
++        { "mirror",         SEC_GAMEMASTER,     false, &ChatHandler::HandleModifyMirrorCommand,        "", NULL }, // ProEMU Custom [Mirror Command]
+         { NULL,             0,                  false, NULL,                                           "", NULL }
+     };
+ 
+diff --git a/src/game/Chat.h b/src/game/Chat.h
+index b322da5..24b4846 100644
+--- a/src/game/Chat.h
++++ b/src/game/Chat.h
+@@ -314,6 +314,7 @@ class ChatHandler
+         bool HandleModifyArenaCommand(char* args);
+         bool HandleModifyPhaseCommand(char* args);
+         bool HandleModifyGenderCommand(char* args);
++        bool HandleModifyMirrorCommand(const char* args); // ProEMU Custom [Mirror Command]
+ 
+         bool HandleModifyPowerTypeCommand(char* args);
+ 
+diff --git a/src/game/Level2.cpp b/src/game/Level2.cpp
+index 1469ac6..248c2a0 100644
+--- a/src/game/Level2.cpp
++++ b/src/game/Level2.cpp
+@@ -4992,3 +4992,21 @@ bool ChatHandler::HandleTitlesCurrentCommand(char* args)
+ 
+     return true;
+ }
++
++// ProEMU Custom [Mirror Command]
++bool ChatHandler::HandleModifyMirrorCommand(const char* args)
++{
++    Creature *pCreature = getSelectedCreature();
++ 
++    if (!pCreature)
++    {
++        SendSysMessage("Please select a creature.");
++        SetSentErrorMessage(true);
++        return false;
++    }
++
++    CreatureInfo const* cInfo = pCreature->GetCreatureInfo();
++    m_session->GetPlayer()->SetDisplayId(pCreature->GetDisplayId());
++ 
++    return true;
++}
+\ No newline at end of file
+-- 
+1.7.3.1.msysgit.0
+

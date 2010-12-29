@@ -1,0 +1,50 @@
+diff --git a/src/game/Language.h b/src/game/Language.h
+index 31ab802..5ad6b6c 100644
+--- a/src/game/Language.h
++++ b/src/game/Language.h
+@@ -901,8 +901,8 @@ enum MangosStrings
+     // Broadcaster
+     LANG_AUTO_BROADCAST                 = 1300,
+ 	
+-    LANG_SYSTEMMESSAGE_MODERATOR          = 1301,
+-    LANG_SYSTEMMESSAGE_SUPERMODERATOR     = 1302,
++    LANG_SYSTEMMESSAGE_VIP          = 1301,
++    LANG_SYSTEMMESSAGE_MODERATOR     = 1302,
+     LANG_SYSTEMMESSAGE_MODERATORCHIEF     = 1303,
+     LANG_SYSTEMMESSAGE_GAMEOPERATOR       = 1304,
+     LANG_SYSTEMMESSAGE_SUPERGAMEOPERATOR  = 1305,
+diff --git a/src/game/Level1.cpp b/src/game/Level1.cpp
+index cfe628b..0918341 100644
+--- a/src/game/Level1.cpp
++++ b/src/game/Level1.cpp
+@@ -141,12 +141,12 @@ bool ChatHandler::HandleNameAnnounceCommand(char* args)
+ 
+     switch(m_session->GetSecurity())
+ 	{
++		case SEC_VIP:
++			strid = LANG_SYSTEMMESSAGE_VIP;
++        break;
+ 		case SEC_MODERATOR:
+ 			strid = LANG_SYSTEMMESSAGE_MODERATOR;
+         break;
+-		case SEC_SUPERMODERATOR:
+-			strid = LANG_SYSTEMMESSAGE_SUPERMODERATOR;
+-        break;
+ 		case SEC_MODERATORCHIEF:
+ 			strid = LANG_SYSTEMMESSAGE_MODERATORCHIEF;
+         break;
+diff --git a/src/shared/Common.h b/src/shared/Common.h
+index 08a8fd7..071023b 100644
+--- a/src/shared/Common.h
++++ b/src/shared/Common.h
+@@ -177,8 +177,8 @@ enum TimeConstants
+ enum AccountTypes
+ {
+     SEC_PLAYER			= 0,
+-	SEC_MODERATOR			= 1,
+-	SEC_SUPERMODERATOR		= 2,
++	SEC_VIP			= 1,
++	SEC_MODERATOR		= 2,
+ 	SEC_MODERATORCHIEF	= 3,
+ 	SEC_GAMEOPERATOR		= 4,
+ 	SEC_SUPERGAMEOPERATOR	= 5,
